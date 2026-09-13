@@ -1,6 +1,6 @@
 {
   "name": "chile-transparente",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -13,12 +13,14 @@
     "sync:chilecompra": "bun src/cli/index.ts sync chilecompra",
     "sync:bcentral": "bun src/cli/index.ts sync bcentral",
     "stats": "bun src/cli/index.ts stats",
-    "test": "bun test"
+    "test": "bun test",
+    "sync:datos:resources": "bun src/cli/index.ts sync datos-resources"
   },
   "dependencies": {
     "fast-xml-parser": "^5.2.5",
     "papaparse": "^5.5.3",
-    "xlsx": "^0.18.5"
+    "xlsx": "^0.18.5",
+    "fflate": "^0.8.2"
   },
   "devDependencies": {
     "@types/bun": "latest",
