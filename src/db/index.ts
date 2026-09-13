@@ -43,12 +43,19 @@ export function initDb() {
         metadata_json=excluded.metadata_json
     `);
     db.transaction(() => {
-      for (const s of SOURCES) stmt.run({$id:s.id,$name:s.name,$institution:s.institution,$domain:s.domain,$baseUrl:s.baseUrl,$auth:s.auth,$automatic:s.automatic?1:0,$metadata:JSON.stringify(s)});
+      for (const s of SOURCES) stmt.run({
+        $id:s.id,$name:s.name,$institution:s.institution,$domain:s.domain,$baseUrl:s.baseUrl,
+        $auth:s.auth,$automatic:s.automatic?1:0,$metadata:JSON.stringify(s)
+      });
     })();
 
-    const { seedGeography, countryGeoAreaId, resolveGeoArea } = await import("../geo");
+    // Keep startup cheap. Semantic/geographic backfills over millions of rows
+    // must never run implicitly when invoking stats/dev/sync commands.
+    const { seedGeography } = await import("../geo");
     seedGeography();
 
+    // This copies only the small BCCh series catalog into metric definitions.
+    // It does not touch the observations table.
     db.exec(`
       INSERT INTO metric_definitions(source_id,external_id,title,description,category,subcategory,unit,frequency,geo_scope,metadata_json)
       SELECT source_id,external_id,title,description,'economia',NULL,NULL,
@@ -59,31 +66,6 @@ export function initDb() {
         title=excluded.title,description=excluded.description,frequency=excluded.frequency,
         metadata_json=excluded.metadata_json;
     `);
-
-    const countryId=countryGeoAreaId();
-    const metrics=db.query(`SELECT external_id,title FROM metric_definitions WHERE source_id='bcentral'`).all() as Array<{external_id:string,title:string}>;
-    const setMetricScope=db.prepare(`UPDATE metric_definitions SET geo_scope=? WHERE source_id='bcentral' AND external_id=?`);
-    const setObservationGeo=db.prepare(`UPDATE observations SET geo_area_id=? WHERE source_id='bcentral' AND metric=?`);
-    db.transaction(()=>{
-      for(const metric of metrics){
-        const regional=resolveGeoArea(null,metric.title);
-        if(regional){ setMetricScope.run('region',metric.external_id); setObservationGeo.run(regional,metric.external_id); }
-        else { setMetricScope.run('country',metric.external_id); setObservationGeo.run(countryId,metric.external_id); }
-      }
-    })();
-
-    const pending=db.query(`SELECT id,payload_json FROM transactions WHERE source_id='chilecompra' AND geo_area_id IS NULL`).all() as Array<{id:number,payload_json:string}>;
-    const setGeo=db.prepare(`UPDATE transactions SET geo_area_id=? WHERE id=?`);
-    db.transaction(()=>{
-      for(const row of pending){
-        try{
-          const oc=JSON.parse(row.payload_json||"{}"); const buyer=oc.Comprador??{};
-          const region=buyer.RegionUnidad??buyer.Region??buyer.NombreRegion??oc.Region??null;
-          const geoId=region?resolveGeoArea(null,String(region)):null;
-          if(geoId) setGeo.run(geoId,row.id);
-        }catch{}
-      }
-    })();
   });
 }
 
