@@ -21,11 +21,12 @@ function renderMap(kind='combined'){
       const purchaseIntensity=amount/maxAmount,energyIntensity=energyObs/maxEnergy;
       const intensity=kind==='transaction'?purchaseIntensity:kind==='energy'?energyIntensity:kind==='combined'?Math.max(purchaseIntensity,energyIntensity):0;
       const layer=L.geoJSON(f,{style:{weight:kind==='geography'?1.5:1,fillOpacity:kind==='geography'?.08:.10+Math.min(.60,intensity*.60)}});
-      layer.bindTooltip(`${p.label||'Región'} · ${p.code||''}`,{sticky:true,direction:'top'});
+      const hover=document.createElement('span');hover.textContent=`${p.label||'Región'} · ${p.code||''}`;layer.bindTooltip(hover,{sticky:true,direction:'top'});
       layer.bindPopup(document.createTextNode(`${p.label||'Región'} (${p.code||'—'}) — ${fmt.format(p.transactions||0)} compras — ${money(amount)} — ${fmt.format(energyObs)} observaciones energía — ${fmt.format(p.energy_metrics||0)} métricas energía`));
       layer.addTo(featureLayer);
       if(kind==='geography'&&p.centroid_lat!=null&&p.centroid_lon!=null){
-        L.marker([p.centroid_lat,p.centroid_lon],{interactive:false,icon:L.divIcon({className:'geo-label',html:`<span>${p.label}</span>`,iconSize:null})}).addTo(featureLayer);
+        const label=document.createElement('span');label.textContent=p.label||'Región';
+        L.circleMarker([p.centroid_lat,p.centroid_lon],{radius:1,opacity:0,fillOpacity:0,interactive:false}).bindTooltip(label,{permanent:true,direction:'center',className:'geo-label'}).addTo(featureLayer);
       }
       continue;
     }
