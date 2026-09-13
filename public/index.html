@@ -8,16 +8,26 @@
 <link rel="stylesheet" href="/styles.css"/>
 </head>
 <body>
-<header><div class="brand"><span class="mark">CL</span><div><b>Chile Transparente</b><small>Hechos públicos, fuentes verificables</small></div></div><nav><button class="active">Panorama</button><button>Gastos</button><button>Partidos</button><button>Proyectos de ley</button><button>Elecciones</button><button>Sociedad</button></nav><input id="search" placeholder="Buscar institución, proyecto, comuna…"/></header>
+<header><div class="brand"><span class="mark">CL</span><div><b>Chile Transparente</b><small>Hechos públicos, fuentes verificables</small></div></div><nav><button class="active">Panorama</button><button>Gastos</button><button>Economía</button><button>Partidos</button><button>Proyectos de ley</button><button>Elecciones</button><button>Sociedad</button></nav><input id="search" placeholder="Buscar institución, proyecto, comuna…"/></header>
 <main>
 <section class="panel">
   <h1>Panorama político, económico y social</h1>
   <p class="muted">Explora registros individuales del Estado y sus fuentes. Los resúmenes son derivados; los registros originales permanecen auditables.</p>
-  <div class="filters"><label>Año<select><option>Todos</option><option>2026</option><option>2025</option></select></label><label>Región<select><option>Todas</option></select></label><label>Categoría<select><option>Todas</option><option>Compras públicas</option><option>Elecciones</option><option>Legislación</option><option>Lobby</option><option>Seguridad</option></select></label><label>Fuente<select id="sourceFilter"><option value="">Todas</option></select></label></div>
-  <div class="cards"><article><small>Fuentes registradas</small><strong id="sources">—</strong></article><article><small>Datasets descubiertos</small><strong id="datasets">—</strong></article><article><small>Recursos</small><strong id="resources">—</strong></article><article><small>Registros crudos</small><strong id="sourceRecords">—</strong></article></div>
+  <div class="filters"><label>Año<select><option>Todos</option><option>2026</option><option>2025</option></select></label><label>Región<select><option>Todas</option></select></label><label>Categoría<select><option>Todas</option><option>Compras públicas</option><option>Economía</option><option>Elecciones</option><option>Legislación</option><option>Lobby</option><option>Seguridad</option></select></label><label>Fuente<select id="sourceFilter"><option value="">Todas</option></select></label></div>
+  <div class="cards"><article><small>Fuentes registradas</small><strong id="sources">—</strong></article><article><small>Datasets descubiertos</small><strong id="datasets">—</strong></article><article><small>Registros crudos</small><strong id="sourceRecords">—</strong></article><article><small>Observaciones</small><strong id="observations">—</strong></article></div>
   <section class="ingest-card"><div><b>Estado de ingesta</b><small>Los recursos se descargan y parsean de forma incremental.</small></div><div id="ingestStatus" class="status-pills"></div></section>
-  <div class="tabs"><button class="active">Registros</button><button>Proyectos</button><button>Relaciones</button><button>Metodología</button></div>
-  <section class="table-card"><div class="table-title"><h2>Últimos registros transaccionales</h2><span id="status">SQLite local</span></div><table><thead><tr><th>Fecha</th><th>Tipo</th><th>Título</th><th>Fuente</th><th>Monto</th></tr></thead><tbody id="rows"><tr><td colspan="5">Sincroniza una fuente para comenzar.</td></tr></tbody></table></section>
+
+  <section class="data-section">
+    <div class="section-head"><div><h2>Series económicas</h2><small>Observaciones normalizadas, incluyendo Banco Central.</small></div><div class="series-controls"><select id="metricFilter"><option value="">Todas las métricas</option></select><input id="fromDate" type="date"/><input id="toDate" type="date"/><button id="applySeries">Aplicar</button></div></div>
+    <div class="metric-strip"><span>Series cargadas <b id="metricCount">0</b></span><span>Última fecha <b id="latestObservation">—</b></span></div>
+    <div class="table-card"><table><thead><tr><th>Fecha</th><th>Fuente</th><th>Métrica</th><th>Valor</th><th>Unidad</th></tr></thead><tbody id="observationRows"><tr><td colspan="5">Sin observaciones todavía.</td></tr></tbody></table></div>
+  </section>
+
+  <section class="data-section">
+    <div class="section-head"><div><h2>Últimas transacciones</h2><small>Compras, transferencias y otros movimientos normalizados.</small></div><span id="status">SQLite local</span></div>
+    <div class="table-card"><table><thead><tr><th>Fecha</th><th>Tipo</th><th>Título</th><th>Fuente</th><th>Monto</th></tr></thead><tbody id="rows"><tr><td colspan="5">Sin transacciones normalizadas todavía.</td></tr></tbody></table></div>
+  </section>
+
   <section class="sources"><h2>Universo de fuentes</h2><div id="sourceCards"></div></section>
 </section>
 <aside class="map-pane">
