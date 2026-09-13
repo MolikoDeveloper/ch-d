@@ -8,35 +8,81 @@
 <link rel="stylesheet" href="/styles.css"/>
 </head>
 <body>
-<header><div class="brand"><span class="mark">CL</span><div><b>Chile Transparente</b><small>Hechos públicos, fuentes verificables</small></div></div><nav><button class="active">Panorama</button><button>Gastos</button><button>Economía</button><button>Partidos</button><button>Proyectos de ley</button><button>Elecciones</button><button>Sociedad</button></nav><input id="search" placeholder="Buscar institución, proyecto, comuna…"/></header>
+<header>
+  <div class="brand"><span class="mark">CL</span><div><b>Chile Transparente</b><small>Hechos públicos, fuentes verificables</small></div></div>
+  <nav><button class="active">Panorama</button><button>Gastos</button><button>Economía</button><button>Partidos</button><button>Proyectos de ley</button><button>Elecciones</button><button>Sociedad</button></nav>
+  <input id="search" placeholder="Buscar institución, proyecto, comuna…"/>
+</header>
 <main>
-<section class="panel">
-  <h1>Panorama político, económico y social</h1>
-  <p class="muted">Explora registros individuales del Estado y sus fuentes. Los resúmenes son derivados; los registros originales permanecen auditables.</p>
-  <div class="filters"><label>Año<select><option>Todos</option><option>2026</option><option>2025</option></select></label><label>Región<select><option>Todas</option></select></label><label>Categoría<select><option>Todas</option><option>Compras públicas</option><option>Economía</option><option>Elecciones</option><option>Legislación</option><option>Lobby</option><option>Seguridad</option></select></label><label>Fuente<select id="sourceFilter"><option value="">Todas</option></select></label></div>
-  <div class="cards"><article><small>Fuentes registradas</small><strong id="sources">—</strong></article><article><small>Datasets descubiertos</small><strong id="datasets">—</strong></article><article><small>Registros crudos</small><strong id="sourceRecords">—</strong></article><article><small>Observaciones</small><strong id="observations">—</strong></article></div>
-  <section class="ingest-card"><div><b>Estado de ingesta</b><small>Los recursos se descargan y parsean de forma incremental.</small></div><div id="ingestStatus" class="status-pills"></div></section>
+<section class="panel dashboard-panel">
+  <div class="hero-row">
+    <div><h1>Panorama político, económico y social</h1><p class="muted">Resumen de datos públicos normalizados. El detalle y los registros originales permanecen disponibles en sus vistas específicas.</p></div>
+    <div class="sync-badge"><span class="sync-dot"></span><div><b id="syncLabel">Datos locales</b><small id="updatedAt">Actualizando…</small></div></div>
+  </div>
 
-  <section class="data-section">
-    <div class="section-head"><div><h2>Series económicas</h2><small>Observaciones normalizadas, incluyendo Banco Central.</small></div><div class="series-controls"><select id="metricFilter"><option value="">Todas las métricas</option></select><input id="fromDate" type="date"/><input id="toDate" type="date"/><button id="applySeries">Aplicar</button></div></div>
-    <div class="metric-strip"><span>Series cargadas <b id="metricCount">0</b></span><span>Última fecha <b id="latestObservation">—</b></span></div>
-    <div class="table-card"><table><thead><tr><th>Fecha</th><th>Fuente</th><th>Métrica</th><th>Valor</th><th>Unidad</th></tr></thead><tbody id="observationRows"><tr><td colspan="5">Sin observaciones todavía.</td></tr></tbody></table></div>
-  </section>
+  <div class="filters">
+    <label>Año<select><option>Todos</option><option>2026</option><option>2025</option></select></label>
+    <label>Región<select><option>Todas</option></select></label>
+    <label>Categoría<select><option>Todas</option><option>Compras públicas</option><option>Economía</option><option>Elecciones</option><option>Legislación</option><option>Lobby</option><option>Seguridad</option></select></label>
+    <label>Fuente<select id="sourceFilter"><option value="">Todas</option></select></label>
+  </div>
 
-  <section class="data-section">
-    <div class="section-head"><div><h2>Últimas transacciones</h2><small>Compras, transferencias y otros movimientos normalizados.</small></div><span id="status">SQLite local</span></div>
-    <div class="table-card"><table><thead><tr><th>Fecha</th><th>Tipo</th><th>Título</th><th>Fuente</th><th>Monto</th></tr></thead><tbody id="rows"><tr><td colspan="5">Sin transacciones normalizadas todavía.</td></tr></tbody></table></div>
-  </section>
+  <div class="cards summary-cards">
+    <article><span class="icon blue-icon">DB</span><div><small>Fuentes registradas</small><strong id="sources">—</strong><em>organismos y sistemas</em></div></article>
+    <article><span class="icon blue-icon">DS</span><div><small>Datasets descubiertos</small><strong id="datasets">—</strong><em>catálogo indexado</em></div></article>
+    <article><span class="icon red-icon">RG</span><div><small>Registros crudos</small><strong id="sourceRecords">—</strong><em>filas preservadas</em></div></article>
+    <article><span class="icon green-icon">SR</span><div><small>Series económicas</small><strong id="metricCount">—</strong><em>métricas normalizadas</em></div></article>
+    <article><span class="icon purple-icon">OB</span><div><small>Observaciones</small><strong id="observations">—</strong><em>puntos históricos</em></div></article>
+  </div>
 
-  <section class="sources"><h2>Universo de fuentes</h2><div id="sourceCards"></div></section>
+  <div class="dashboard-grid top-grid">
+    <section class="dash-card wide-card">
+      <div class="dash-head"><div><h2>Indicadores económicos recientes</h2><small>Últimos valores disponibles desde series normalizadas</small></div><a href="#">Ver economía →</a></div>
+      <div id="economicSeries" class="series-list"><div class="empty-state">Cargando series…</div></div>
+    </section>
+
+    <section class="dash-card">
+      <div class="dash-head"><div><h2>Distribución del gasto</h2><small>Transacciones con monto por categoría</small></div><a href="#">Ver gastos →</a></div>
+      <div id="spendChart" class="bar-list"><div class="empty-state">Sin gasto normalizado todavía.</div></div>
+    </section>
+
+    <section class="dash-card">
+      <div class="dash-head"><div><h2>Actividad política</h2><small>Entidades ya normalizadas</small></div><a href="#">Explorar →</a></div>
+      <div class="politics-kpis">
+        <div><b id="partiesCount">0</b><span>Partidos registrados</span></div>
+        <div><b id="projectsCount">0</b><span>Proyectos</span></div>
+        <div><b id="transactionsCount">0</b><span>Transacciones</span></div>
+      </div>
+    </section>
+  </div>
+
+  <div class="dashboard-grid bottom-grid">
+    <section class="dash-card">
+      <div class="dash-head"><div><h2>Proyectos por estado</h2><small>Resumen de proyectos normalizados</small></div><a href="#">Ver proyectos →</a></div>
+      <div id="projectStatus" class="status-list"><div class="empty-state">Sin proyectos normalizados todavía.</div></div>
+    </section>
+
+    <section class="dash-card ingest-overview">
+      <div class="dash-head"><div><h2>Estado de ingesta</h2><small>Descarga y procesamiento incremental</small></div></div>
+      <div class="ingest-progress"><div class="progress-ring"><span id="progressPercent">0%</span></div><div><b id="progressLabel">Esperando recursos</b><small id="progressDetail">—</small></div></div>
+      <div id="ingestStatus" class="status-pills"></div>
+    </section>
+
+    <section class="dash-card">
+      <div class="dash-head"><div><h2>Actividad reciente</h2><small>Últimas ejecuciones de ingesta</small></div></div>
+      <div id="recentRuns" class="activity-list"><div class="empty-state">Sin actividad reciente.</div></div>
+    </section>
+  </div>
+
+  <section class="footer-card"><div><b>Datos abiertos para una mejor ciudadanía</b><small>Los resúmenes se calculan desde registros auditables y fuentes públicas.</small></div><span>Metodología y fuentes →</span></section>
 </section>
+
 <aside class="map-pane">
-  <div class="map-head"><div><b>Mapa territorial real</b><small>OpenStreetMap + capas normalizadas desde SQLite</small></div><select id="mapLayer"><option value="combined">Actividad combinada</option><option value="transaction">Transacciones</option><option value="observation">Observaciones</option></select></div>
+  <div class="map-head"><div><b>Mapa territorial de Chile</b><small>Capas geográficas desde SQLite</small></div><select id="mapLayer"><option value="combined">Actividad combinada</option><option value="transaction">Transacciones</option><option value="observation">Observaciones</option></select></div>
   <div id="map" class="real-map" aria-label="Mapa interactivo de Chile"></div>
-  <div class="map-legend"><b>Capas</b><span><i class="dot blue"></i>Transacción</span><span><i class="dot red"></i>Observación / evento</span><small>Las geometrías oficiales de INE/IDE pueden añadirse como GeoJSON sin cambiar esta vista.</small></div>
+  <div class="map-legend"><b>Capas</b><span><i class="dot blue"></i>Transacción</span><span><i class="dot red"></i>Observación / evento</span><small>Las capas oficiales INE/IDE se incorporarán cuando se normalicen las geometrías.</small></div>
 </aside>
 </main>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script type="module" src="/app-v2.js"></script>
-<script type="module" src="/observations.js"></script>
 </body></html>
