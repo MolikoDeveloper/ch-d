@@ -4,8 +4,6 @@ import { SOURCES } from "../domain/sources";
 const path = process.env.DB_PATH ?? "./data/chile.sqlite";
 export const db = new Database(path, { create: true });
 
-// The web server reads while ingest jobs write. WAL lets readers coexist with a
-// writer, and busy_timeout avoids failing immediately during short write locks.
 db.exec(`PRAGMA journal_mode=WAL;`);
 db.exec(`PRAGMA synchronous=NORMAL;`);
 db.exec(`PRAGMA busy_timeout=30000;`);
@@ -32,7 +30,6 @@ export function initDb() {
     addColumn("source_resources","http_etag","TEXT");
     addColumn("source_resources","http_last_modified","TEXT");
     addColumn("source_resources","skip_reason","TEXT");
-    db.exec(`CREATE INDEX IF NOT EXISTS idx_resources_sync_status ON source_resources(sync_status)`);
 
     const stmt = db.prepare(`
       INSERT INTO sources (id,name,institution,domain,base_url,auth_kind,automatic,metadata_json)
@@ -49,13 +46,11 @@ export function initDb() {
       });
     })();
 
-    // Keep startup cheap. Semantic/geographic backfills over millions of rows
-    // must never run implicitly when invoking stats/dev/sync commands.
+    // Startup must remain independent of the size of the observations table.
     const { seedGeography } = await import("../geo");
     seedGeography();
 
-    // This copies only the small BCCh series catalog into metric definitions.
-    // It does not touch the observations table.
+    // Small catalog-only migration; no observation backfill happens here.
     db.exec(`
       INSERT INTO metric_definitions(source_id,external_id,title,description,category,subcategory,unit,frequency,geo_scope,metadata_json)
       SELECT source_id,external_id,title,description,'economia',NULL,NULL,
@@ -72,6 +67,11 @@ export function initDb() {
 export function startRun(sourceId: string) {
   const res = db.prepare(`INSERT INTO ingest_runs(source_id,started_at,status) VALUES(?,?,?)`).run(sourceId,new Date().toISOString(),"running");
   return Number(res.lastInsertRowid);
+}
+
+export function updateRunProgress(id:number, seen:number, written:number, message:string|null=null){
+  db.prepare(`UPDATE ingest_runs SET records_seen=?,records_written=?,message=? WHERE id=?`)
+    .run(seen,written,message,id);
 }
 
 export function finishRun(id:number,status:"success"|"failed", message:string|null, seen:number, written:number){
