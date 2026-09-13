@@ -1,32 +1,7 @@
 import { db } from "../db";
+import { resolveGeoArea } from "../geo";
 import type { NormalizedTransaction } from "../domain/types";
 
-function upsertOrg(sourceId:string, externalId:string|null|undefined, name:string, rut?:string|null, partyType?:string|null){
-  const key = externalId || `${partyType ?? "org"}:${rut ?? name}`;
-  db.prepare(`INSERT INTO organizations(canonical_name,rut,organization_type,source_id,external_id,metadata_json)
-    VALUES(?,?,?,?,?,?)
-    ON CONFLICT(source_id,external_id) DO UPDATE SET canonical_name=excluded.canonical_name,rut=COALESCE(excluded.rut,organizations.rut),organization_type=COALESCE(excluded.organization_type,organizations.organization_type)`)
-    .run(name,rut ?? null,partyType ?? null,sourceId,key,"{}");
-  return (db.prepare(`SELECT id FROM organizations WHERE source_id=? AND external_id=?`).get(sourceId,key) as {id:number}).id;
-}
+function upsertOrg(sourceId:string,externalId:string|null|undefined,name:string,rut?:string|null,partyType?:string|null){const key=externalId||`${partyType??"org"}:${rut??name}`;db.prepare(`INSERT INTO organizations(canonical_name,rut,organization_type,source_id,external_id,metadata_json) VALUES(?,?,?,?,?,?) ON CONFLICT(source_id,external_id) DO UPDATE SET canonical_name=excluded.canonical_name,rut=COALESCE(excluded.rut,organizations.rut),organization_type=COALESCE(excluded.organization_type,organizations.organization_type)`).run(name,rut??null,partyType??null,sourceId,key,"{}");return(db.prepare(`SELECT id FROM organizations WHERE source_id=? AND external_id=?`).get(sourceId,key)as{id:number}).id}
 
-export function upsertTransaction(t:NormalizedTransaction){
-  db.prepare(`INSERT INTO transactions
-    (source_id,external_id,transaction_type,occurred_at,published_at,amount,currency,title,description,category,subcategory,raw_snapshot_id,payload_json)
-    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)
-    ON CONFLICT(source_id,external_id,transaction_type) DO UPDATE SET
-      occurred_at=excluded.occurred_at,published_at=excluded.published_at,amount=excluded.amount,currency=excluded.currency,
-      title=excluded.title,description=excluded.description,category=excluded.category,subcategory=excluded.subcategory,
-      raw_snapshot_id=excluded.raw_snapshot_id,payload_json=excluded.payload_json,updated_at=CURRENT_TIMESTAMP`)
-    .run(t.sourceId,t.externalId,t.transactionType,t.occurredAt ?? null,t.publishedAt ?? null,t.amount ?? null,t.currency ?? null,
-      t.title ?? null,t.description ?? null,t.category ?? null,t.subcategory ?? null,t.rawSnapshotId ?? null,JSON.stringify(t.payload));
-
-  const row = db.prepare(`SELECT id FROM transactions WHERE source_id=? AND external_id=? AND transaction_type=?`).get(t.sourceId,t.externalId,t.transactionType) as {id:number};
-  db.prepare(`DELETE FROM transaction_parties WHERE transaction_id=?`).run(row.id);
-  for(const p of t.parties ?? []){
-    const orgId = upsertOrg(t.sourceId,p.externalId,p.name,p.rut,p.partyType);
-    db.prepare(`INSERT OR REPLACE INTO transaction_parties(transaction_id,role,organization_id,raw_name,raw_id,metadata_json) VALUES(?,?,?,?,?,?)`)
-      .run(row.id,p.role,orgId,p.name,p.externalId ?? null,"{}");
-  }
-  return row.id;
-}
+export function upsertTransaction(t:NormalizedTransaction){const geoAreaId=resolveGeoArea(t.geoCode,t.geoName);db.prepare(`INSERT INTO transactions(source_id,external_id,transaction_type,occurred_at,published_at,amount,currency,title,description,category,subcategory,geo_area_id,raw_snapshot_id,payload_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(source_id,external_id,transaction_type) DO UPDATE SET occurred_at=excluded.occurred_at,published_at=excluded.published_at,amount=excluded.amount,currency=excluded.currency,title=excluded.title,description=excluded.description,category=excluded.category,subcategory=excluded.subcategory,geo_area_id=COALESCE(excluded.geo_area_id,transactions.geo_area_id),raw_snapshot_id=excluded.raw_snapshot_id,payload_json=excluded.payload_json,updated_at=CURRENT_TIMESTAMP`).run(t.sourceId,t.externalId,t.transactionType,t.occurredAt??null,t.publishedAt??null,t.amount??null,t.currency??null,t.title??null,t.description??null,t.category??null,t.subcategory??null,geoAreaId,t.rawSnapshotId??null,JSON.stringify(t.payload));const row=db.prepare(`SELECT id FROM transactions WHERE source_id=? AND external_id=? AND transaction_type=?`).get(t.sourceId,t.externalId,t.transactionType)as{id:number};db.prepare(`DELETE FROM transaction_parties WHERE transaction_id=?`).run(row.id);for(const p of t.parties??[]){const orgId=upsertOrg(t.sourceId,p.externalId,p.name,p.rut,p.partyType);db.prepare(`INSERT OR REPLACE INTO transaction_parties(transaction_id,role,organization_id,raw_name,raw_id,metadata_json) VALUES(?,?,?,?,?,?)`).run(row.id,p.role,orgId,p.name,p.externalId??null,"{}")}return row.id}
