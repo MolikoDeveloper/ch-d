@@ -240,7 +240,6 @@ CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(occurred_at);
 CREATE INDEX IF NOT EXISTS idx_transactions_type ON transactions(transaction_type);
 CREATE INDEX IF NOT EXISTS idx_transactions_category ON transactions(category);
 CREATE INDEX IF NOT EXISTS idx_transactions_source ON transactions(source_id);
-CREATE INDEX IF NOT EXISTS idx_observations_source ON observations(source_id);
 CREATE INDEX IF NOT EXISTS idx_observations_metric_date ON observations(metric, observed_at);
 CREATE INDEX IF NOT EXISTS idx_ingest_runs_source ON ingest_runs(source_id,id);
 CREATE INDEX IF NOT EXISTS idx_resources_format ON source_resources(format);
