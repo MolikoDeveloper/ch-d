@@ -2,260 +2,145 @@ import { db, finishRun, startRun } from "../../db";
 import { fetchAndSnapshot } from "../raw";
 
 const ENDPOINT = "https://si3.bcentral.cl/SieteRestWS/SieteRestWS.ashx";
-const FREQUENCIES = ["DAILY", "MONTHLY", "QUARTERLY", "ANNUAL"] as const;
+const FREQUENCIES = ["DAILY", "MONTHLY", "QUARTERLY", "ANNUAL"];
 
-type Frequency = typeof FREQUENCIES[number];
-type SeriesInfo = {
-  seriesId: string;
-  frequency?: string;
-  frequencyCode?: string;
-  spanishTitle?: string;
-  englishTitle?: string;
-  firstObservation?: string;
-  lastObservation?: string;
-  updatedAt?: string;
-  createdAt?: string;
-  [key: string]: unknown;
+type Series = {
+  seriesId:string;
+  frequencyCode?:string;
+  spanishTitle?:string;
+  englishTitle?:string;
+  firstObservation?:string;
+  lastObservation?:string;
+  updatedAt?:string;
+  [key:string]:unknown;
 };
 
-type Observation = {
-  indexDateString?: string;
-  value?: string | number;
-  statusCode?: string;
-  [key: string]: unknown;
-};
+type Obs = { indexDateString?:string; value?:string|number; statusCode?:string; [key:string]:unknown };
 
-type BcchResponse = {
-  Codigo?: number | string;
-  Descripcion?: string;
-  Series?: {
-    seriesId?: string;
-    descripEsp?: string;
-    descripIng?: string;
-    Obs?: Observation[] | Observation | null;
-  } | null;
-  SeriesInfos?: SeriesInfo[] | SeriesInfo | null;
-};
+function arr<T>(v:T|T[]|null|undefined):T[]{ return v == null ? [] : Array.isArray(v) ? v : [v]; }
 
-function asArray<T>(value:T[] | T | null | undefined):T[]{
-  if(value == null) return [];
-  return Array.isArray(value) ? value : [value];
+function iso(v?:string){
+  if(!v) return null;
+  if(/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+  const m=/^(\d{2})-(\d{2})-(\d{4})$/.exec(v);
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : null;
 }
 
-function apiUrl(token:string, params:Record<string,string>){
-  const url = new URL(ENDPOINT);
-  url.searchParams.set("token", token);
-  for(const [key,value] of Object.entries(params)) url.searchParams.set(key,value);
-  return url.toString();
+function nextDay(v:string){
+  const d=new Date(`${v}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate()+1);
+  return d.toISOString().slice(0,10);
 }
 
-function apiError(payload:BcchResponse, context:string){
-  const code = Number(payload.Codigo ?? 0);
-  if(code !== 0) throw new Error(`${context}: BCCh ${code}: ${payload.Descripcion ?? "error desconocido"}`);
+function url(token:string, params:Record<string,string>){
+  const u=new URL(ENDPOINT);
+  u.searchParams.set("token",token);
+  for(const [k,v] of Object.entries(params)) u.searchParams.set(k,v);
+  return u.toString();
 }
 
-function toIsoDate(value:string | undefined){
-  if(!value) return null;
-  if(/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
-  const match = /^(\d{2})-(\d{2})-(\d{4})$/.exec(value);
-  if(match) return `${match[3]}-${match[2]}-${match[1]}`;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date.toISOString().slice(0,10);
+async function request(token:string, run:number, params:Record<string,string>){
+  const raw=await fetchAndSnapshot("bcentral",run,url(token,params));
+  const json=JSON.parse(raw.text);
+  if(Number(json.Codigo ?? 0)!==0) throw new Error(`BCCh ${json.Codigo}: ${json.Descripcion ?? "error"}`);
+  return {json,snapshotId:raw.snapshotId};
 }
 
-function nextDay(value:string){
-  const date = new Date(`${value}T00:00:00Z`);
-  date.setUTCDate(date.getUTCDate()+1);
-  return date.toISOString().slice(0,10);
+async function discover(token:string,run:number){
+  const map=new Map<string,Series>();
+  for(const frequency of FREQUENCIES){
+    const {json}=await request(token,run,{function:"SearchSeries",frequency});
+    const list=arr<Series>(json.SeriesInfos);
+    console.log(`[bcentral] ${frequency}: ${list.length} series`);
+    for(const s of list) if(s.seriesId) map.set(s.seriesId,s);
+  }
+  return [...map.values()];
 }
 
-function safeNumber(value:unknown){
-  if(value == null || value === "") return null;
-  const number = Number(value);
-  return Number.isFinite(number) ? number : null;
-}
-
-async function discoverFrequency(token:string, runId:number, frequency:Frequency){
-  const url = apiUrl(token,{ function:"SearchSeries", frequency });
-  const raw = await fetchAndSnapshot("bcentral",runId,url);
-  const payload = JSON.parse(raw.text) as BcchResponse;
-  apiError(payload,`SearchSeries ${frequency}`);
-  return asArray(payload.SeriesInfos).filter((item)=>item?.seriesId);
-}
-
-function upsertSeriesCatalog(series:SeriesInfo){
-  db.prepare(`
-    INSERT INTO source_catalog_items(source_id,external_id,title,description,publisher,page_url,metadata_json,updated_at)
+function saveCatalog(s:Series){
+  db.prepare(`INSERT INTO source_catalog_items
+    (source_id,external_id,title,description,publisher,page_url,metadata_json,updated_at)
     VALUES('bcentral',?,?,?,?,?,?,?)
     ON CONFLICT(source_id,external_id) DO UPDATE SET
-      title=excluded.title,
-      description=excluded.description,
-      publisher=excluded.publisher,
-      page_url=excluded.page_url,
-      metadata_json=excluded.metadata_json,
-      updated_at=excluded.updated_at
-  `).run(
-    series.seriesId,
-    series.spanishTitle || series.englishTitle || series.seriesId,
-    series.englishTitle || null,
-    "Banco Central de Chile",
-    "https://si3.bcentral.cl/Siete/ES/Siete",
-    JSON.stringify(series),
-    toIsoDate(series.updatedAt) || series.updatedAt || null,
-  );
+      title=excluded.title,description=excluded.description,metadata_json=excluded.metadata_json,updated_at=excluded.updated_at`)
+    .run(
+      s.seriesId,
+      s.spanishTitle ?? s.englishTitle ?? s.seriesId,
+      s.englishTitle ?? null,
+      "Banco Central de Chile",
+      "https://si3.bcentral.cl/Siete/ES/Siete",
+      JSON.stringify(s),
+      iso(s.updatedAt) ?? s.updatedAt ?? null,
+    );
 }
 
-async function fetchSeries(token:string, runId:number, series:SeriesInfo){
-  const latest = db.prepare(`
-    SELECT MAX(observed_at) AS latest
-    FROM observations
-    WHERE source_id='bcentral' AND metric=?
-  `).get(series.seriesId) as {latest:string|null} | null;
+async function syncSeries(token:string,run:number,s:Series){
+  const row=db.prepare(`SELECT MAX(observed_at) latest FROM observations WHERE source_id='bcentral' AND metric=?`).get(s.seriesId) as {latest:string|null}|null;
+  const first=row?.latest ? nextDay(row.latest.slice(0,10)) : (iso(s.firstObservation) ?? "1900-01-01");
+  const last=iso(s.lastObservation) ?? new Date().toISOString().slice(0,10);
+  if(first>last) return {seen:0,written:0};
 
-  const firstAvailable = toIsoDate(series.firstObservation) ?? "1900-01-01";
-  const lastAvailable = toIsoDate(series.lastObservation) ?? new Date().toISOString().slice(0,10);
-  const firstDate = latest?.latest ? nextDay(latest.latest.slice(0,10)) : firstAvailable;
-  if(firstDate > lastAvailable) return {seen:0,written:0,skipped:true};
-
-  const url = apiUrl(token,{
-    function:"GetSeries",
-    timeseries:series.seriesId,
-    firstdate:firstDate,
-    lastdate:lastAvailable,
-  });
-  const raw = await fetchAndSnapshot("bcentral",runId,url);
-  const payload = JSON.parse(raw.text) as BcchResponse;
-  apiError(payload,`GetSeries ${series.seriesId}`);
-  const observations = asArray(payload.Series?.Obs);
-
-  let written = 0;
-  const stmt = db.prepare(`
-    INSERT INTO observations(
-      source_id,external_id,observed_at,metric,value_number,value_text,unit,
-      subject_type,subject_id,raw_snapshot_id,payload_json
-    ) VALUES('bcentral',?,?,?,?,?,?,?,?,?,?,?)
+  const {json,snapshotId}=await request(token,run,{function:"GetSeries",timeseries:s.seriesId,firstdate:first,lastdate:last});
+  const list=arr<Obs>(json.Series?.Obs);
+  const stmt=db.prepare(`INSERT INTO observations
+    (source_id,external_id,observed_at,metric,value_number,value_text,unit,subject_type,subject_id,raw_snapshot_id,payload_json)
+    VALUES('bcentral',?,?,?,?,?,?,?,?,?,?)
     ON CONFLICT(source_id,external_id,metric) DO UPDATE SET
-      observed_at=excluded.observed_at,
-      value_number=excluded.value_number,
-      value_text=excluded.value_text,
-      raw_snapshot_id=excluded.raw_snapshot_id,
-      payload_json=excluded.payload_json
-  `);
+      observed_at=excluded.observed_at,value_number=excluded.value_number,value_text=excluded.value_text,
+      raw_snapshot_id=excluded.raw_snapshot_id,payload_json=excluded.payload_json`);
 
-  const tx = db.transaction(()=>{
-    for(const observation of observations){
-      const observedAt = toIsoDate(observation.indexDateString);
-      if(!observedAt) continue;
-      const valueNumber = safeNumber(observation.value);
-      const valueText = valueNumber == null && observation.value != null ? String(observation.value) : null;
-      const externalId = `${series.seriesId}:${observedAt}`;
+  let written=0;
+  db.transaction(()=>{
+    for(const o of list){
+      const date=iso(o.indexDateString);
+      if(!date) continue;
+      const n=Number(o.value);
+      const numeric=Number.isFinite(n) ? n : null;
       stmt.run(
-        externalId,
-        observedAt,
-        series.seriesId,
-        valueNumber,
-        valueText,
-        null,
-        "statistical_series",
-        series.seriesId,
-        raw.snapshotId,
-        JSON.stringify({series,observation}),
+        `${s.seriesId}:${date}`,date,s.seriesId,numeric,
+        numeric===null && o.value!=null ? String(o.value) : null,null,
+        "statistical_series",s.seriesId,snapshotId,JSON.stringify({series:s,observation:o}),
       );
       written++;
     }
-  });
-  tx();
-  return {seen:observations.length,written,skipped:false};
-}
-
-async function mapConcurrent<T>(items:T[], concurrency:number, worker:(item:T,index:number)=>Promise<void>){
-  let cursor = 0;
-  const runners = Array.from({length:Math.max(1,concurrency)}, async()=>{
-    while(true){
-      const index = cursor++;
-      if(index >= items.length) return;
-      await worker(items[index],index);
-    }
-  });
-  await Promise.all(runners);
+  })();
+  return {seen:list.length,written};
 }
 
 export async function syncBCentral(){
-  const token = process.env.BCCH_API_KEY?.trim();
+  const token=process.env.BCCH_API_KEY?.trim();
   if(!token) throw new Error("Falta BCCH_API_KEY en .env");
 
-  const run = startRun("bcentral");
-  let seen = 0;
-  let written = 0;
+  const run=startRun("bcentral");
+  let seen=0,written=0,failed=0;
   try{
-    const cfgFile = Bun.file("data/bcentral-series.json");
-    let configuredIds:string[] = [];
-    if(await cfgFile.exists()){
-      try {
-        const cfg = await cfgFile.json() as {series?:Array<{id:string}|string>};
-        configuredIds = (cfg.series ?? []).map((entry)=>typeof entry === "string" ? entry : entry.id).filter(Boolean);
-      } catch {
-        // Un archivo inválido no debe impedir autodiscovery; se regenerará abajo.
-      }
-    }
-
-    const discovered:SeriesInfo[] = [];
-    for(const frequency of FREQUENCIES){
-      const series = await discoverFrequency(token,run,frequency);
-      discovered.push(...series);
-      console.log(`[bcentral] ${frequency}: ${series.length} series descubiertas`);
-    }
-
-    const unique = new Map<string,SeriesInfo>();
-    for(const series of discovered) unique.set(series.seriesId,series);
-    for(const series of unique.values()) upsertSeriesCatalog(series);
-
-    const selected = configuredIds.length
-      ? configuredIds.map((id)=>unique.get(id)).filter((item):item is SeriesInfo=>Boolean(item))
-      : [...unique.values()];
+    const series=await discover(token,run);
+    for(const s of series) saveCatalog(s);
 
     await Bun.write("data/bcentral-series.json",JSON.stringify({
-      mode: configuredIds.length ? "configured" : "auto",
       discoveredAt:new Date().toISOString(),
-      frequencies:FREQUENCIES,
-      series:selected.map((series)=>({
-        id:series.seriesId,
-        name:series.spanishTitle || series.englishTitle || series.seriesId,
-        frequency:series.frequencyCode || series.frequency,
-        firstObservation:series.firstObservation,
-        lastObservation:series.lastObservation,
-      })),
+      series:series.map(s=>({id:s.seriesId,name:s.spanishTitle ?? s.englishTitle ?? s.seriesId,frequency:s.frequencyCode,firstObservation:s.firstObservation,lastObservation:s.lastObservation})),
     },null,2)+"\n");
 
-    console.log(`[bcentral] sincronizando ${selected.length} series`);
-    const concurrency = Math.max(1,Number(process.env.BCCH_CONCURRENCY ?? "2") || 2);
-    let completed = 0;
-    let failed = 0;
-    const errors:string[] = [];
-
-    await mapConcurrent(selected,concurrency,async(series)=>{
-      try{
-        const result = await fetchSeries(token,run,series);
-        seen += result.seen;
-        written += result.written;
-      }catch(error){
-        failed++;
-        const message = `${series.seriesId}: ${String(error)}`;
-        errors.push(message);
-        console.error(`[bcentral] ${message}`);
-      }finally{
-        completed++;
-        if(completed % 25 === 0 || completed === selected.length){
-          console.log(`[bcentral] ${completed}/${selected.length} series · obs=${seen} written=${written} failed=${failed}`);
-        }
+    const concurrency=Math.max(1,Number(process.env.BCCH_CONCURRENCY ?? "2")||2);
+    let cursor=0,done=0;
+    await Promise.all(Array.from({length:concurrency},async()=>{
+      while(true){
+        const i=cursor++;
+        if(i>=series.length) return;
+        try{
+          const r=await syncSeries(token,run,series[i]);
+          seen+=r.seen; written+=r.written;
+        }catch(e){ failed++; console.error(`[bcentral] ${series[i].seriesId}: ${String(e)}`); }
+        done++;
+        if(done%25===0 || done===series.length) console.log(`[bcentral] ${done}/${series.length} series · obs=${seen} written=${written} failed=${failed}`);
       }
-    });
+    }));
 
-    const message = `series=${selected.length}; failed=${failed}${errors.length ? `; firstErrors=${errors.slice(0,5).join(" | ")}` : ""}`;
-    finishRun(run,failed === selected.length && selected.length > 0 ? "failed" : "success",message,seen,written);
-    return {series:selected.length,seen,written,failed,concurrency};
-  }catch(error){
-    finishRun(run,"failed",String(error),seen,written);
-    throw error;
+    finishRun(run,"success",`series=${series.length}; failed=${failed}`,seen,written);
+    return {series:series.length,seen,written,failed,concurrency};
+  }catch(e){
+    finishRun(run,"failed",String(e),seen,written);
+    throw e;
   }
 }
