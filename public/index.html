@@ -23,12 +23,12 @@
   <div class="filters">
     <label>Año<select><option>Todos</option><option>2026</option><option>2025</option></select></label>
     <label>Región<select><option>Todas</option></select></label>
-    <label>Categoría<select><option>Todas</option><option>Compras públicas</option><option>Economía</option><option>Elecciones</option><option>Legislación</option><option>Lobby</option><option>Seguridad</option></select></label>
+    <label>Categoría<select><option>Todas</option><option>Compras públicas</option><option>Economía</option><option>Elecciones</option><option>Legislación</option><option>Municipal</option><option>Energía</option></select></label>
     <label>Fuente<select id="sourceFilter"><option value="">Todas</option></select></label>
   </div>
 
   <div class="cards summary-cards">
-    <article><span class="icon blue-icon">DB</span><div><small>Fuentes registradas</small><strong id="sources">—</strong><em>organismos y sistemas</em></div></article>
+    <article><span class="icon blue-icon">DB</span><div><small>Fuentes registradas</small><strong id="sources">—</strong><em id="populatedSources">— con datos</em></div></article>
     <article><span class="icon blue-icon">DS</span><div><small>Datasets descubiertos</small><strong id="datasets">—</strong><em>catálogo indexado</em></div></article>
     <article><span class="icon red-icon">RG</span><div><small>Registros crudos</small><strong id="sourceRecords">—</strong><em>filas preservadas</em></div></article>
     <article><span class="icon green-icon">SR</span><div><small>Series económicas</small><strong id="metricCount">—</strong><em>métricas normalizadas</em></div></article>
@@ -37,46 +37,35 @@
 
   <div class="dashboard-grid top-grid">
     <section class="dash-card wide-card">
-      <div class="dash-head"><div><h2>Indicadores económicos recientes</h2><small>Últimos valores disponibles desde series normalizadas</small></div><a href="#">Ver economía →</a></div>
+      <div class="dash-head"><div><h2>Indicadores económicos clave</h2><small>UF, UTM, IPC, dólar, TPM e actividad económica cuando estén disponibles</small></div><a href="#">Ver economía →</a></div>
       <div id="economicSeries" class="series-list"><div class="empty-state">Cargando series…</div></div>
     </section>
 
     <section class="dash-card">
-      <div class="dash-head"><div><h2>Distribución del gasto</h2><small>Transacciones con monto por categoría</small></div><a href="#">Ver gastos →</a></div>
-      <div id="spendChart" class="bar-list"><div class="empty-state">Sin gasto normalizado todavía.</div></div>
+      <div class="dash-head"><div><h2>Compras públicas</h2><small>ChileCompra / Mercado Público</small></div><a href="#">Ver compras →</a></div>
+      <div id="chileCompraKpis" class="politics-kpis compact-kpis">
+        <div><b id="ccOrders">0</b><span>Órdenes</span></div>
+        <div><b id="ccAmount">$0</b><span>Monto registrado</span></div>
+        <div><b id="ccBuyers">0</b><span>Compradores</span></div>
+        <div><b id="ccSuppliers">0</b><span>Proveedores</span></div>
+      </div>
     </section>
 
-    <section class="dash-card">
-      <div class="dash-head"><div><h2>Actividad política</h2><small>Entidades ya normalizadas</small></div><a href="#">Explorar →</a></div>
-      <div class="politics-kpis">
-        <div><b id="partiesCount">0</b><span>Partidos registrados</span></div>
-        <div><b id="projectsCount">0</b><span>Proyectos</span></div>
-        <div><b id="transactionsCount">0</b><span>Transacciones</span></div>
-      </div>
+    <section class="dash-card source-coverage-card">
+      <div class="dash-head"><div><h2>Cobertura de fuentes</h2><small>Fuentes que ya aportan datos al sistema</small></div></div>
+      <div id="sourceCoverage" class="coverage-list"><div class="empty-state">Calculando cobertura…</div></div>
     </section>
   </div>
 
   <div class="dashboard-grid bottom-grid">
     <section class="dash-card">
-      <div class="dash-head"><div><h2>ChileCompra</h2><small>Órdenes de compra normalizadas</small></div><a href="#">Ver compras →</a></div>
-      <div class="politics-kpis compact-kpis">
-        <div><b id="ccOrders">0</b><span>Órdenes</span></div>
-        <div><b id="ccAmount">$0</b><span>Monto</span></div>
-        <div><b id="ccBuyers">0</b><span>Compradores</span></div>
-        <div><b id="ccSuppliers">0</b><span>Proveedores</span></div>
-      </div>
+      <div class="dash-head"><div><h2>Compras por territorio</h2><small>Monto ChileCompra asociado a regiones</small></div><a href="#">Ver mapa →</a></div>
       <div id="ccRegions" class="bar-list"><div class="empty-state">Sin compras georreferenciadas todavía.</div></div>
     </section>
 
-    <section class="dash-card">
-      <div class="dash-head"><div><h2>Proyectos por estado</h2><small>Resumen de proyectos normalizados</small></div><a href="#">Ver proyectos →</a></div>
-      <div id="projectStatus" class="status-list"><div class="empty-state">Sin proyectos normalizados todavía.</div></div>
-    </section>
-
     <section class="dash-card ingest-overview">
-      <div class="dash-head"><div><h2>Estado de ingesta</h2><small>Descarga y procesamiento incremental</small></div></div>
-      <div class="ingest-progress"><div class="progress-ring"><span id="progressPercent">0%</span></div><div><b id="progressLabel">Esperando recursos</b><small id="progressDetail">—</small></div></div>
-      <div id="ingestStatus" class="status-pills"></div>
+      <div class="dash-head"><div><h2>Estado de ingesta</h2><small>Progreso separado por conector</small></div></div>
+      <div id="connectorProgress" class="connector-progress"><div class="empty-state">Cargando progreso…</div></div>
     </section>
 
     <section class="dash-card">
@@ -89,9 +78,9 @@
 </section>
 
 <aside class="map-pane">
-  <div class="map-head"><div><b>Mapa territorial de Chile</b><small>Regiones oficiales y actividad normalizada</small></div><select id="mapLayer"><option value="combined">Actividad combinada</option><option value="transaction">Transacciones</option><option value="observation">Observaciones</option></select></div>
+  <div class="map-head"><div><b>Mapa territorial de Chile</b><small>Regiones oficiales y actividad normalizada</small></div><select id="mapLayer"><option value="combined">Actividad combinada</option><option value="transaction">Compras públicas</option><option value="observation">Observaciones regionales</option><option value="areas">Regiones</option></select></div>
   <div id="map" class="real-map" aria-label="Mapa interactivo de Chile"></div>
-  <div class="map-legend"><b>Capas</b><span><i class="dot blue"></i>Transacción</span><span><i class="dot red"></i>Observación / evento</span><small>Los polígonos regionales se cargan desde la fuente geográfica oficial configurada.</small></div>
+  <div class="map-legend"><b>Capas</b><span><i class="dot blue"></i>Transacción</span><span><i class="dot red"></i>Observación / evento</span><span><i class="dot area-dot"></i>Región</span><small>Los datos nacionales no se representan como puntos falsos sobre Santiago.</small></div>
 </aside>
 </main>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
