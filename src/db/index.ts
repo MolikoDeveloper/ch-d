@@ -13,10 +13,8 @@ function addColumn(table:string, name:string, sql:string){
 
 export function initDb() {
   const sql = Bun.file(new URL("./schema.sql", import.meta.url));
-  return sql.text().then((text) => {
+  return sql.text().then(async (text) => {
     db.exec(text);
-
-    // Lightweight migrations for databases created by earlier project versions.
     addColumn("source_resources","sync_status","TEXT NOT NULL DEFAULT 'pending'");
     addColumn("source_resources","last_attempt_at","TEXT");
     addColumn("source_resources","last_success_at","TEXT");
@@ -37,13 +35,11 @@ export function initDb() {
         base_url=excluded.base_url,auth_kind=excluded.auth_kind,automatic=excluded.automatic,
         metadata_json=excluded.metadata_json
     `);
-    const tx = db.transaction(() => {
-      for (const s of SOURCES) stmt.run({
-        $id:s.id,$name:s.name,$institution:s.institution,$domain:s.domain,$baseUrl:s.baseUrl,
-        $auth:s.auth,$automatic:s.automatic?1:0,$metadata:JSON.stringify(s)
-      });
-    });
-    tx();
+    db.transaction(() => {
+      for (const s of SOURCES) stmt.run({$id:s.id,$name:s.name,$institution:s.institution,$domain:s.domain,$baseUrl:s.baseUrl,$auth:s.auth,$automatic:s.automatic?1:0,$metadata:JSON.stringify(s)});
+    })();
+    const { seedGeography } = await import("../geo");
+    seedGeography();
   });
 }
 
