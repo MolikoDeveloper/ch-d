@@ -17,6 +17,14 @@ function redactUrl(raw:string){
   }
 }
 
+function decodeText(bytes:Uint8Array, contentType:string|null){
+  const match=/charset\s*=\s*([^;\s]+)/i.exec(contentType??"");
+  const raw=(match?.[1]??"utf-8").replace(/["']/g,"").toLowerCase();
+  const charset=raw==="latin1"?"windows-1252":raw;
+  try { return new TextDecoder(charset).decode(bytes); }
+  catch { return new TextDecoder("utf-8").decode(bytes); }
+}
+
 export async function fetchAndSnapshot(sourceId:string, runId:number, url:string, init?:RequestInit){
   const response = await fetch(url, init);
   const bytes = new Uint8Array(await response.arrayBuffer());
@@ -30,12 +38,13 @@ export async function fetchAndSnapshot(sourceId:string, runId:number, url:string
   await Bun.write(localPath, bytes);
 
   const storedUrl = redactUrl(url);
+  const contentType=response.headers.get("content-type");
   db.prepare(`INSERT OR IGNORE INTO raw_snapshots
     (source_id,ingest_run_id,fetched_at,source_url,content_type,sha256,byte_size,local_path,http_status)
     VALUES(?,?,?,?,?,?,?,?,?)`)
-    .run(sourceId,runId,date.toISOString(),storedUrl,response.headers.get("content-type"),sha256,bytes.byteLength,localPath,response.status);
+    .run(sourceId,runId,date.toISOString(),storedUrl,contentType,sha256,bytes.byteLength,localPath,response.status);
 
   const row = db.prepare(`SELECT id FROM raw_snapshots WHERE source_id=? AND sha256=?`).get(sourceId,sha256) as {id:number};
   if(!response.ok) throw new Error(`HTTP ${response.status} ${storedUrl}`);
-  return { snapshotId: row.id, response, bytes, text: new TextDecoder().decode(bytes), sha256, localPath };
+  return { snapshotId: row.id, response, bytes, text: decodeText(bytes,contentType), sha256, localPath };
 }
