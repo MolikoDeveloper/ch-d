@@ -186,6 +186,16 @@ CREATE TABLE IF NOT EXISTS source_resources (
   url TEXT NOT NULL,
   datastore_active INTEGER NOT NULL DEFAULT 0,
   metadata_json TEXT NOT NULL,
+  sync_status TEXT NOT NULL DEFAULT 'pending',
+  last_attempt_at TEXT,
+  last_success_at TEXT,
+  last_error TEXT,
+  last_snapshot_id INTEGER,
+  last_sha256 TEXT,
+  record_count INTEGER NOT NULL DEFAULT 0,
+  http_etag TEXT,
+  http_last_modified TEXT,
+  skip_reason TEXT,
   UNIQUE(catalog_item_id, external_id)
 );
 
@@ -210,3 +220,4 @@ CREATE INDEX IF NOT EXISTS idx_transactions_category ON transactions(category);
 CREATE INDEX IF NOT EXISTS idx_transactions_source ON transactions(source_id);
 CREATE INDEX IF NOT EXISTS idx_observations_metric_date ON observations(metric, observed_at);
 CREATE INDEX IF NOT EXISTS idx_resources_format ON source_resources(format);
+CREATE INDEX IF NOT EXISTS idx_resources_sync_status ON source_resources(sync_status);
