@@ -1,128 +1,98 @@
-const fmt = new Intl.NumberFormat('es-CL');
-const money = (n, c = 'CLP') => n == null ? '—' : new Intl.NumberFormat('es-CL', { style: 'currency', currency: c || 'CLP', maximumFractionDigits: 0 }).format(n);
-const $ = (q) => document.querySelector(q);
+const $=q=>document.querySelector(q);
+const fmt=new Intl.NumberFormat('es-CL');
+const compact=new Intl.NumberFormat('es-CL',{notation:'compact',maximumFractionDigits:1});
+let map,featureLayer,allFeatures=[];
 
-let map;
-let featureLayer;
-let allFeatures = [];
+function el(tag,text,cls){const n=document.createElement(tag);if(cls)n.className=cls;if(text!=null)n.textContent=String(text);return n}
+function formatValue(v){if(v==null||v==='')return '—';const n=Number(v);return Number.isFinite(n)?new Intl.NumberFormat('es-CL',{maximumFractionDigits:3}).format(n):String(v)}
+function formatDate(v){return v?new Date(v).toLocaleString('es-CL',{dateStyle:'medium',timeStyle:'short'}):'—'}
 
-function initMap() {
-  map = L.map('map', { zoomControl: true, preferCanvas: true, minZoom: 3, maxZoom: 18 });
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19,
-    attribution: '© OpenStreetMap contributors'
-  }).addTo(map);
-  map.fitBounds([[-56.3, -76.8], [-17.2, -66.0]], { padding: [10, 10] });
-  featureLayer = L.layerGroup().addTo(map);
+function initMap(){
+  map=L.map('map',{zoomControl:true,preferCanvas:true,minZoom:3,maxZoom:18});
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap contributors'}).addTo(map);
+  map.fitBounds([[-56.3,-76.8],[-17.2,-66.0]],{padding:[10,10]});
+  featureLayer=L.layerGroup().addTo(map);
 }
-
-function popupText(p) {
-  const parts = [p.label ?? p.kind, p.geo_name ?? '', p.date?.slice?.(0, 10) ?? ''];
-  if (p.value != null) parts.push(`${fmt.format(p.value)} ${p.unit ?? ''}`);
-  return parts.filter(Boolean).join(' — ');
-}
-
-function renderMap(kind = 'combined') {
+function renderMap(kind='combined'){
   featureLayer.clearLayers();
-  const features = allFeatures.filter((f) => kind === 'combined' || f.properties.kind === kind);
-  for (const f of features) {
-    if (!f.geometry || f.geometry.type !== 'Point') continue;
-    const [lon, lat] = f.geometry.coordinates;
-    const p = f.properties;
-    const color = p.kind === 'transaction' ? '#1769e0' : '#d93045';
-    L.circleMarker([lat, lon], { radius: 6, weight: 1, color: '#fff', fillColor: color, fillOpacity: 0.85 })
-      .bindPopup(document.createTextNode(popupText(p)))
-      .addTo(featureLayer);
+  for(const f of allFeatures){
+    if(kind!=='combined'&&f.properties.kind!==kind)continue;
+    if(f.geometry?.type!=='Point')continue;
+    const [lon,lat]=f.geometry.coordinates,p=f.properties;
+    const marker=L.circleMarker([lat,lon],{radius:6,weight:1,color:'#fff',fillColor:p.kind==='transaction'?'#1769e0':'#d93045',fillOpacity:.86});
+    marker.bindPopup(document.createTextNode([p.label,p.geo_name,p.date?.slice?.(0,10),p.value].filter(Boolean).join(' — '))).addTo(featureLayer);
   }
 }
 
-function appendTextElement(parent, tag, text, className) {
-  const el = document.createElement(tag);
-  if (className) el.className = className;
-  el.textContent = text;
-  parent.appendChild(el);
-  return el;
+function renderSources(sources){
+  const select=$('#sourceFilter');select.replaceChildren(el('option','Todas'));
+  select.firstChild.value='';
+  for(const s of sources){const o=el('option',s.name);o.value=s.id;select.appendChild(o)}
 }
 
-function renderSources(sources) {
-  const cards = $('#sourceCards');
-  cards.replaceChildren();
-  for (const s of sources.slice(0, 18)) {
-    const card = document.createElement('div');
-    card.className = 'source-card';
-    appendTextElement(card, 'b', s.name);
-    appendTextElement(card, 'small', `${s.domain} · ${s.kinds.join(', ')}`);
-    cards.appendChild(card);
-  }
-
-  const select = $('#sourceFilter');
-  select.replaceChildren();
-  const all = document.createElement('option');
-  all.value = '';
-  all.textContent = 'Todas';
-  select.appendChild(all);
-  for (const s of sources) {
-    const option = document.createElement('option');
-    option.value = s.id;
-    option.textContent = s.name;
-    select.appendChild(option);
+function renderEconomic(series){
+  const box=$('#economicSeries');box.replaceChildren();
+  if(!series.length){box.appendChild(el('div','Aún no hay series económicas normalizadas.','empty-state'));return}
+  for(const s of series){
+    const row=el('div',null,'series-row');
+    const info=el('div');info.append(el('b',s.label),el('small',`${s.metric} · ${s.date?.slice?.(0,10)??'sin fecha'}`));
+    const value=el('strong',formatValue(s.value));
+    row.append(info,value);box.appendChild(row);
   }
 }
 
-function renderTransactions(transactions) {
-  const tbody = $('#rows');
-  tbody.replaceChildren();
-  if (!transactions.length) {
-    const row = document.createElement('tr');
-    const cell = document.createElement('td');
-    cell.colSpan = 5;
-    cell.textContent = 'Aún no hay transacciones normalizadas; los registros crudos pueden estar ya descargados.';
-    row.appendChild(cell);
-    tbody.appendChild(row);
-    return;
-  }
-  for (const t of transactions) {
-    const row = document.createElement('tr');
-    for (const value of [t.occurred_at?.slice(0, 10) ?? '—', t.transaction_type, t.title ?? t.external_id, t.source_id, money(t.amount, t.currency)]) {
-      appendTextElement(row, 'td', String(value ?? '—'));
-    }
-    tbody.appendChild(row);
+function renderSpend(items){
+  const box=$('#spendChart');box.replaceChildren();
+  if(!items.length){box.appendChild(el('div','Sin transacciones con monto normalizadas todavía.','empty-state'));return}
+  const max=Math.max(...items.map(x=>Number(x.total)||0),1);
+  for(const x of items){
+    const row=el('div',null,'bar-row');
+    row.append(el('span',x.category));
+    const track=el('div',null,'bar-track'),fill=el('i',null,'bar-fill');fill.style.width=`${Math.max(3,(Number(x.total)||0)/max*100)}%`;track.appendChild(fill);
+    row.append(track,el('b',compact.format(Number(x.total)||0)));box.appendChild(row);
   }
 }
 
-function renderStatus(statuses) {
-  const container = $('#ingestStatus');
-  container.replaceChildren();
-  let found = false;
-  for (const key of ['pending', 'parsed', 'downloaded', 'unsupported', 'failed']) {
-    if (!statuses[key]) continue;
-    found = true;
-    appendTextElement(container, 'span', `${key}: ${fmt.format(statuses[key])}`, `pill ${key}`);
-  }
-  if (!found) appendTextElement(container, 'span', 'sin estado', 'pill');
+function renderProjects(items){
+  const box=$('#projectStatus');box.replaceChildren();
+  if(!items.length){box.appendChild(el('div','Sin proyectos normalizados todavía.','empty-state'));return}
+  for(const x of items){const row=el('div',null,'status-row');row.append(el('span',x.status),el('b',fmt.format(x.count)));box.appendChild(row)}
 }
 
-async function load() {
-  const [summary, sources, transactions, geo] = await Promise.all([
-    fetch('/api/summary').then((r) => r.json()),
-    fetch('/api/sources').then((r) => r.json()),
-    fetch('/api/transactions?limit=30').then((r) => r.json()),
-    fetch('/api/map/features').then((r) => r.json())
+function renderIngest(status,activeRuns){
+  const total=Object.values(status).reduce((a,b)=>a+Number(b||0),0);
+  const done=Number(status.parsed||0)+Number(status.downloaded||0)+Number(status.unsupported||0);
+  const pct=total?Math.round(done/total*100):0;
+  $('#progressPercent').textContent=`${pct}%`;
+  document.documentElement.style.setProperty('--progress',`${pct*3.6}deg`);
+  $('#progressLabel').textContent=activeRuns.length?'Sincronización en curso':'Estado de recursos';
+  $('#progressDetail').textContent=total?`${fmt.format(done)} de ${fmt.format(total)} recursos resueltos`:'Sin recursos catalogados';
+  $('#syncLabel').textContent=activeRuns.length?`Sincronizando ${activeRuns.map(r=>r.source_id).join(', ')}`:'Datos locales actualizados';
+  const pills=$('#ingestStatus');pills.replaceChildren();
+  for(const key of ['pending','parsed','downloaded','unsupported','failed'])if(status[key])pills.appendChild(el('span',`${key}: ${fmt.format(status[key])}`,`pill ${key}`));
+}
+
+function renderRuns(runs){
+  const box=$('#recentRuns');box.replaceChildren();
+  if(!runs.length){box.appendChild(el('div','Sin actividad reciente.','empty-state'));return}
+  for(const r of runs){const row=el('div',null,'activity-row');const info=el('div');info.append(el('b',r.source_id),el('small',`${r.status} · ${formatDate(r.finished_at||r.started_at)}`));row.append(info,el('span',fmt.format(r.records_written||0)));box.appendChild(row)}
+}
+
+async function refresh(){
+  const [dash,sources,geo]=await Promise.all([
+    fetch('/api/dashboard').then(r=>r.json()),
+    fetch('/api/sources').then(r=>r.json()),
+    fetch('/api/map/features').then(r=>r.json())
   ]);
-  $('#sources').textContent = fmt.format(summary.sources);
-  $('#datasets').textContent = fmt.format(summary.catalogItems);
-  $('#resources').textContent = fmt.format(summary.resources);
-  $('#sourceRecords').textContent = fmt.format(summary.sourceRecords);
-  renderSources(sources);
-  renderTransactions(transactions);
-  renderStatus(summary.resourceStatus || {});
-  allFeatures = geo.features || [];
-  renderMap($('#mapLayer').value);
+  const t=dash.totals;
+  $('#sources').textContent=fmt.format(t.sources);$('#datasets').textContent=fmt.format(t.datasets);$('#sourceRecords').textContent=fmt.format(t.sourceRecords);$('#metricCount').textContent=fmt.format(t.metrics);$('#observations').textContent=fmt.format(t.observations);
+  $('#partiesCount').textContent=fmt.format(t.parties);$('#projectsCount').textContent=fmt.format(t.projects);$('#transactionsCount').textContent=fmt.format(t.transactions);
+  $('#updatedAt').textContent=`Actualizado ${formatDate(dash.generatedAt)}`;
+  renderSources(sources);renderEconomic(dash.economicSeries||[]);renderSpend(dash.spendByCategory||[]);renderProjects(dash.projectStatus||[]);renderIngest(dash.resourceStatus||{},dash.activeRuns||[]);renderRuns(dash.recentRuns||[]);
+  allFeatures=geo.features||[];renderMap($('#mapLayer').value);
 }
 
 initMap();
-$('#mapLayer').addEventListener('change', (e) => renderMap(e.target.value));
-load().catch((e) => {
-  $('#status').textContent = `Error: ${e.message}`;
-  console.error(e);
-});
+$('#mapLayer').addEventListener('change',e=>renderMap(e.target.value));
+refresh().catch(console.error);
+setInterval(()=>refresh().catch(console.error),10000);
