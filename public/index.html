@@ -4,6 +4,7 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Chile Transparente</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <link rel="stylesheet" href="/styles.css"/>
 </head>
 <body>
@@ -13,20 +14,18 @@
   <h1>Panorama político, económico y social</h1>
   <p class="muted">Explora registros individuales del Estado y sus fuentes. Los resúmenes son derivados; los registros originales permanecen auditables.</p>
   <div class="filters"><label>Año<select><option>Todos</option><option>2026</option><option>2025</option></select></label><label>Región<select><option>Todas</option></select></label><label>Categoría<select><option>Todas</option><option>Compras públicas</option><option>Elecciones</option><option>Legislación</option><option>Lobby</option><option>Seguridad</option></select></label><label>Fuente<select id="sourceFilter"><option value="">Todas</option></select></label></div>
-  <div class="cards"><article><small>Fuentes registradas</small><strong id="sources">—</strong></article><article><small>Datasets descubiertos</small><strong id="datasets">—</strong></article><article><small>Recursos</small><strong id="resources">—</strong></article><article><small>Transacciones</small><strong id="transactions">—</strong></article></div>
+  <div class="cards"><article><small>Fuentes registradas</small><strong id="sources">—</strong></article><article><small>Datasets descubiertos</small><strong id="datasets">—</strong></article><article><small>Recursos</small><strong id="resources">—</strong></article><article><small>Registros crudos</small><strong id="sourceRecords">—</strong></article></div>
+  <section class="ingest-card"><div><b>Estado de ingesta</b><small>Los recursos se descargan y parsean de forma incremental.</small></div><div id="ingestStatus" class="status-pills"></div></section>
   <div class="tabs"><button class="active">Registros</button><button>Proyectos</button><button>Relaciones</button><button>Metodología</button></div>
   <section class="table-card"><div class="table-title"><h2>Últimos registros transaccionales</h2><span id="status">SQLite local</span></div><table><thead><tr><th>Fecha</th><th>Tipo</th><th>Título</th><th>Fuente</th><th>Monto</th></tr></thead><tbody id="rows"><tr><td colspan="5">Sincroniza una fuente para comenzar.</td></tr></tbody></table></section>
   <section class="sources"><h2>Universo de fuentes</h2><div id="sourceCards"></div></section>
 </section>
 <aside class="map-pane">
-  <div class="map-head"><div><b>Territorio de Chile</b><small>La capa cambia según los filtros</small></div><select><option>Actividad combinada</option><option>Gasto</option><option>Elecciones</option><option>Proyectos</option><option>Eventos sociales</option></select></div>
-  <div class="map-canvas">
-    <div class="north">N</div>
-    <div class="chile-shape" aria-label="Representación esquemática de Chile"></div>
-    <div class="region-labels"><span>Arica y Parinacota</span><span>Antofagasta</span><span>Coquimbo</span><span>Valparaíso</span><span>Metropolitana</span><span>Biobío</span><span>La Araucanía</span><span>Los Lagos</span><span>Aysén</span><span>Magallanes</span></div>
-    <div class="legend"><b>Capas</b><span><i class="dot blue"></i>Dato estatal</span><span><i class="dot red"></i>Evento político/social</span><span><i class="dot green"></i>Proyecto/inversión</span><small>Mapa real: cargar geometrías oficiales desde IDE/INE.</small></div>
-  </div>
+  <div class="map-head"><div><b>Mapa territorial real</b><small>OpenStreetMap + capas normalizadas desde SQLite</small></div><select id="mapLayer"><option value="combined">Actividad combinada</option><option value="transaction">Transacciones</option><option value="observation">Observaciones</option></select></div>
+  <div id="map" class="real-map" aria-label="Mapa interactivo de Chile"></div>
+  <div class="map-legend"><b>Capas</b><span><i class="dot blue"></i>Transacción</span><span><i class="dot red"></i>Observación / evento</span><small>Las geometrías oficiales de INE/IDE pueden añadirse como GeoJSON sin cambiar esta vista.</small></div>
 </aside>
 </main>
-<script type="module" src="/app.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script type="module" src="/app-v2.js"></script>
 </body></html>
