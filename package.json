@@ -10,11 +10,12 @@
     "sources:list": "bun src/cli/index.ts sources:list",
     "sync": "bun src/cli/index.ts sync",
     "sync:datos": "bun src/cli/index.ts sync datos-gob",
+    "sync:datos:resources": "bun src/cli/index.ts sync datos-resources",
     "sync:chilecompra": "bun src/cli/index.ts sync chilecompra",
     "sync:bcentral": "bun src/cli/index.ts sync bcentral",
+    "sync:geo": "bun src/cli/index.ts sync geo",
     "stats": "bun src/cli/index.ts stats",
-    "test": "bun test",
-    "sync:datos:resources": "bun src/cli/index.ts sync datos-resources"
+    "test": "bun test"
   },
   "dependencies": {
     "fast-xml-parser": "^5.2.5",
