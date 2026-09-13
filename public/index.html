@@ -58,6 +58,17 @@
 
   <div class="dashboard-grid bottom-grid">
     <section class="dash-card">
+      <div class="dash-head"><div><h2>ChileCompra</h2><small>Órdenes de compra normalizadas</small></div><a href="#">Ver compras →</a></div>
+      <div class="politics-kpis compact-kpis">
+        <div><b id="ccOrders">0</b><span>Órdenes</span></div>
+        <div><b id="ccAmount">$0</b><span>Monto</span></div>
+        <div><b id="ccBuyers">0</b><span>Compradores</span></div>
+        <div><b id="ccSuppliers">0</b><span>Proveedores</span></div>
+      </div>
+      <div id="ccRegions" class="bar-list"><div class="empty-state">Sin compras georreferenciadas todavía.</div></div>
+    </section>
+
+    <section class="dash-card">
       <div class="dash-head"><div><h2>Proyectos por estado</h2><small>Resumen de proyectos normalizados</small></div><a href="#">Ver proyectos →</a></div>
       <div id="projectStatus" class="status-list"><div class="empty-state">Sin proyectos normalizados todavía.</div></div>
     </section>
@@ -78,9 +89,9 @@
 </section>
 
 <aside class="map-pane">
-  <div class="map-head"><div><b>Mapa territorial de Chile</b><small>Capas geográficas desde SQLite</small></div><select id="mapLayer"><option value="combined">Actividad combinada</option><option value="transaction">Transacciones</option><option value="observation">Observaciones</option></select></div>
+  <div class="map-head"><div><b>Mapa territorial de Chile</b><small>Regiones oficiales y actividad normalizada</small></div><select id="mapLayer"><option value="combined">Actividad combinada</option><option value="transaction">Transacciones</option><option value="observation">Observaciones</option></select></div>
   <div id="map" class="real-map" aria-label="Mapa interactivo de Chile"></div>
-  <div class="map-legend"><b>Capas</b><span><i class="dot blue"></i>Transacción</span><span><i class="dot red"></i>Observación / evento</span><small>Las capas oficiales INE/IDE se incorporarán cuando se normalicen las geometrías.</small></div>
+  <div class="map-legend"><b>Capas</b><span><i class="dot blue"></i>Transacción</span><span><i class="dot red"></i>Observación / evento</span><small>Los polígonos regionales se cargan desde la fuente geográfica oficial configurada.</small></div>
 </aside>
 </main>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
