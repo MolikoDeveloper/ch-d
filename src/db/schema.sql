@@ -83,6 +83,29 @@ CREATE TABLE IF NOT EXISTS geo_areas (
   UNIQUE(source_id, external_id)
 );
 
+CREATE TABLE IF NOT EXISTS geo_aliases (
+  alias TEXT PRIMARY KEY,
+  normalized_alias TEXT NOT NULL,
+  geo_area_id INTEGER NOT NULL REFERENCES geo_areas(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_geo_aliases_normalized ON geo_aliases(normalized_alias);
+
+CREATE TABLE IF NOT EXISTS metric_definitions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  source_id TEXT NOT NULL REFERENCES sources(id),
+  external_id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  description TEXT,
+  category TEXT,
+  subcategory TEXT,
+  unit TEXT,
+  frequency TEXT,
+  geo_scope TEXT,
+  metadata_json TEXT NOT NULL,
+  UNIQUE(source_id, external_id)
+);
+CREATE INDEX IF NOT EXISTS idx_metric_definitions_source ON metric_definitions(source_id);
+
 CREATE TABLE IF NOT EXISTS projects (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   source_id TEXT NOT NULL REFERENCES sources(id),
@@ -199,7 +222,6 @@ CREATE TABLE IF NOT EXISTS source_resources (
   UNIQUE(catalog_item_id, external_id)
 );
 
-
 CREATE TABLE IF NOT EXISTS source_records (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   source_id TEXT NOT NULL REFERENCES sources(id),
@@ -211,9 +233,9 @@ CREATE TABLE IF NOT EXISTS source_records (
   imported_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   UNIQUE(resource_id, record_hash)
 );
+
 CREATE INDEX IF NOT EXISTS idx_source_records_resource ON source_records(resource_id);
 CREATE INDEX IF NOT EXISTS idx_source_records_source ON source_records(source_id);
-
 CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(occurred_at);
 CREATE INDEX IF NOT EXISTS idx_transactions_type ON transactions(transaction_type);
 CREATE INDEX IF NOT EXISTS idx_transactions_category ON transactions(category);
