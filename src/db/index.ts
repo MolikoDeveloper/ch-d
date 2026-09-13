@@ -38,8 +38,21 @@ export function initDb() {
     db.transaction(() => {
       for (const s of SOURCES) stmt.run({$id:s.id,$name:s.name,$institution:s.institution,$domain:s.domain,$baseUrl:s.baseUrl,$auth:s.auth,$automatic:s.automatic?1:0,$metadata:JSON.stringify(s)});
     })();
-    const { seedGeography } = await import("../geo");
+
+    const { seedGeography, countryGeoAreaId } = await import("../geo");
     seedGeography();
+
+    db.exec(`
+      INSERT INTO metric_definitions(source_id,external_id,title,description,category,subcategory,unit,frequency,geo_scope,metadata_json)
+      SELECT source_id,external_id,title,description,'economia',NULL,NULL,
+             json_extract(metadata_json,'$.frequencyCode'),'country',metadata_json
+      FROM source_catalog_items
+      WHERE source_id='bcentral'
+      ON CONFLICT(source_id,external_id) DO UPDATE SET
+        title=excluded.title,description=excluded.description,frequency=excluded.frequency,
+        geo_scope=excluded.geo_scope,metadata_json=excluded.metadata_json;
+    `);
+    db.prepare(`UPDATE observations SET geo_area_id=? WHERE source_id='bcentral' AND geo_area_id IS NULL`).run(countryGeoAreaId());
   });
 }
 
