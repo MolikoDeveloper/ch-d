@@ -13,6 +13,7 @@
     "sync:datos:resources": "bun src/cli/index.ts sync datos-resources",
     "sync:chilecompra": "bun src/cli/index.ts sync chilecompra",
     "sync:bcentral": "bun src/cli/index.ts sync bcentral",
+    "sync:energia": "bun src/cli/index.ts sync energia-abierta",
     "sync:geo": "bun src/cli/index.ts sync geo",
     "stats": "bun src/cli/index.ts stats",
     "test": "bun test"
