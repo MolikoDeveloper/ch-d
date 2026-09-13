@@ -1,0 +1,45 @@
+import { finishRun, startRun } from "../../db";
+import { fetchAndSnapshot } from "../raw";
+import { upsertTransaction } from "../normalize";
+
+function ddmmyyyy(d:Date){ return `${String(d.getUTCDate()).padStart(2,"0")}${String(d.getUTCMonth()+1).padStart(2,"0")}${d.getUTCFullYear()}`; }
+function isoDateOnly(d:Date){ return d.toISOString().slice(0,10); }
+function dateRange(from:string,to:string){
+  const out:Date[]=[]; let d=new Date(`${from}T00:00:00Z`); const end=new Date(`${to}T00:00:00Z`);
+  while(d<=end){ out.push(new Date(d)); d.setUTCDate(d.getUTCDate()+1); }
+  return out;
+}
+function num(v:unknown):number|null { const n=Number(v); return Number.isFinite(n)?n:null; }
+
+export async function syncChileCompra(from:string,to:string){
+  const ticket=process.env.CHILECOMPRA_TICKET;
+  if(!ticket) throw new Error("Falta CHILECOMPRA_TICKET en .env");
+  const run=startRun("chilecompra"); let seen=0,written=0;
+  try{
+    for(const day of dateRange(from,to)){
+      const url=`https://api.mercadopublico.cl/servicios/v1/publico/ordenesdecompra.json?fecha=${ddmmyyyy(day)}&ticket=${encodeURIComponent(ticket)}`;
+      const snap=await fetchAndSnapshot("chilecompra",run,url);
+      const body=JSON.parse(snap.text) as any;
+      const list=body.Listado ?? body.listado ?? [];
+      for(const oc of list){
+        seen++;
+        const code=String(oc.Codigo ?? oc.codigo ?? `${isoDateOnly(day)}:${seen}`);
+        // La consulta diaria puede entregar información básica. Se conserva completa en payload.
+        upsertTransaction({
+          sourceId:"chilecompra", externalId:code, transactionType:"purchase_order",
+          occurredAt: oc.Fechas?.FechaCreacion ?? oc.FechaCreacion ?? isoDateOnly(day),
+          amount:num(oc.Total ?? oc.MontoNeto ?? oc.total), currency:String(oc.Moneda ?? "CLP"),
+          title:oc.Nombre ?? oc.Descripcion ?? `Orden de compra ${code}`,
+          description:oc.Descripcion ?? null, category:"compras-publicas", subcategory:String(oc.Tipo ?? oc.Estado ?? "orden-compra"),
+          rawSnapshotId:snap.snapshotId,payload:oc,
+          parties:[
+            ...(oc.Comprador?.NombreOrganismo||oc.NombreOrganismo?[{role:"buyer",externalId:String(oc.Comprador?.CodigoOrganismo ?? oc.CodigoOrganismo ?? ""),name:String(oc.Comprador?.NombreOrganismo ?? oc.NombreOrganismo),rut:oc.Comprador?.RutUnidad ?? null,partyType:"public-body"}]:[]),
+            ...(oc.Proveedor?.Nombre||oc.NombreProveedor?[{role:"supplier",externalId:String(oc.Proveedor?.Codigo ?? oc.CodigoProveedor ?? ""),name:String(oc.Proveedor?.Nombre ?? oc.NombreProveedor),rut:oc.Proveedor?.RutSucursal ?? oc.RutProveedor ?? null,partyType:"supplier"}]:[])
+          ]
+        });
+        written++;
+      }
+    }
+    finishRun(run,"success",null,seen,written); return {seen,written};
+  }catch(e){ finishRun(run,"failed",String(e),seen,written); throw e; }
+}
