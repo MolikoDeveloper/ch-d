@@ -4,6 +4,13 @@ import { SOURCES } from "../domain/sources";
 const path = process.env.DB_PATH ?? "./data/chile.sqlite";
 export const db = new Database(path, { create: true });
 
+// The web server reads while ingest jobs write. WAL lets readers coexist with a
+// writer, and busy_timeout avoids failing immediately during short write locks.
+db.exec(`PRAGMA journal_mode=WAL;`);
+db.exec(`PRAGMA synchronous=NORMAL;`);
+db.exec(`PRAGMA busy_timeout=30000;`);
+db.exec(`PRAGMA foreign_keys=ON;`);
+
 function columns(table:string){
   return new Set((db.query(`PRAGMA table_info(${table})`).all() as Array<{name:string}>).map(r=>r.name));
 }
