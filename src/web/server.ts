@@ -8,6 +8,14 @@ function json(data:unknown,status=200){ return Response.json(data,{status,header
 function num(q:string,...params:any[]){ return Number((db.query(q).get(...params) as any)?.n ?? 0); }
 function rows(q:string,...params:any[]){ return db.query(q).all(...params) as any[]; }
 
+type CacheEntry={at:number,value:unknown};
+const cache=new Map<string,CacheEntry>();
+function cached<T>(key:string,ttlMs:number,build:()=>T):T{
+  const now=Date.now(),hit=cache.get(key);
+  if(hit&&now-hit.at<ttlMs) return hit.value as T;
+  const value=build(); cache.set(key,{at:now,value}); return value;
+}
+
 const KEY_SERIES=[
   {key:"uf",label:"Unidad de Fomento (UF)",patterns:["%unidad de fomento%"]},
   {key:"utm",label:"Unidad Tributaria Mensual (UTM)",patterns:["%unidad tributaria mensual%"]},
@@ -27,7 +35,7 @@ function latestEconomicSeries(){
     }
     if(!metric||used.has(metric.external_id)) continue;
     used.add(metric.external_id);
-    const obs=db.query(`SELECT observed_at,value_number,value_text,unit FROM observations WHERE source_id='bcentral' AND metric=? ORDER BY observed_at DESC,id DESC LIMIT 1`).get(metric.external_id) as any;
+    const obs=db.query(`SELECT observed_at,value_number,value_text,unit FROM observations WHERE metric=? ORDER BY observed_at DESC,id DESC LIMIT 1`).get(metric.external_id) as any;
     if(!obs) continue;
     out.push({key:wanted.key,metric:metric.external_id,label:metric.title?.includes('�')?wanted.label:metric.title,date:obs.observed_at,value:obs.value_number??obs.value_text,unit:metric.unit??obs.unit,frequency:metric.frequency,geoScope:metric.geo_scope});
   }
@@ -65,18 +73,66 @@ function sourceCoverage(){
 }
 
 function connectorProgress(){
-  const totalResources=num(`SELECT count(*) n FROM source_resources`);
-  const doneResources=num(`SELECT count(*) n FROM source_resources WHERE sync_status IN ('parsed','downloaded','unsupported')`);
-  const bRun=latestRun('bcentral'); const dRun=latestRun('datos-gob'); const cRun=latestRun('chilecompra');
+  const resourceCounts=Object.fromEntries(rows(`SELECT sync_status,count(*) n FROM source_resources GROUP BY sync_status`).map(r=>[r.sync_status,Number(r.n)]));
+  const totalResources=Object.values(resourceCounts).reduce((a:any,b:any)=>a+Number(b||0),0) as number;
+  const doneResources=Number(resourceCounts.parsed||0)+Number(resourceCounts.downloaded||0)+Number(resourceCounts.unsupported||0);
+  const bRun=latestRun('bcentral'),dRun=latestRun('datos-gob'),cRun=latestRun('chilecompra');
   const metrics=num(`SELECT count(*) n FROM metric_definitions WHERE source_id='bcentral'`);
   const shapes=num(`SELECT count(*) n FROM geo_areas WHERE source_id='ide-chile' AND geometry_json IS NOT NULL`);
   const areas=num(`SELECT count(*) n FROM geo_areas WHERE source_id='ide-chile' AND geo_type='region'`);
+  const match=bRun?.message?.match(/^(\d+)\/(\d+)/);
   return [
     {id:'datos-gob',name:'Datos.gob.cl',current:doneResources,total:totalResources,unit:'recursos',run:dRun},
-    {id:'bcentral',name:'Banco Central',current:bRun?.message?.match(/^(\d+)\/(\d+)/)?.[1]?Number(bRun.message.match(/^(\d+)\/(\d+)/)[1]):(bRun?.status==='success'?metrics:0),total:bRun?.message?.match(/^(\d+)\/(\d+)/)?.[2]?Number(bRun.message.match(/^(\d+)\/(\d+)/)[2]):metrics,unit:'series',run:bRun},
+    {id:'bcentral',name:'Banco Central',current:match?Number(match[1]):(bRun?.status==='success'?metrics:0),total:match?Number(match[2]):metrics,unit:'series',run:bRun},
     {id:'chilecompra',name:'ChileCompra',current:num(`SELECT count(*) n FROM transactions WHERE source_id='chilecompra'`),total:null,unit:'órdenes',run:cRun},
     {id:'ide-chile',name:'Geografía',current:shapes,total:areas,unit:'regiones',run:null},
   ];
+}
+
+function progressPayload(){
+  return {
+    generatedAt:new Date().toISOString(),
+    connectorProgress:connectorProgress(),
+    recentRuns:rows(`SELECT id,source_id,started_at,finished_at,status,message,records_seen,records_written FROM ingest_runs ORDER BY id DESC LIMIT 8`),
+    activeRuns:rows(`SELECT id,source_id,started_at,status,message,records_seen,records_written FROM ingest_runs WHERE status='running' ORDER BY id DESC LIMIT 8`)
+  };
+}
+
+function dashboardPayload(){
+  const coverage=sourceCoverage();
+  return {
+    generatedAt:new Date().toISOString(),
+    totals:{
+      sources:num("SELECT count(*) n FROM sources"),
+      populatedSources:coverage.filter(x=>x.active).length,
+      datasets:num("SELECT count(*) n FROM source_catalog_items"),
+      resources:num("SELECT count(*) n FROM source_resources"),
+      sourceRecords:num("SELECT count(*) n FROM source_records"),
+      observations:num("SELECT count(*) n FROM observations"),
+      transactions:num("SELECT count(*) n FROM transactions"),
+      metrics:num("SELECT count(*) n FROM metric_definitions"),
+      snapshots:num("SELECT count(*) n FROM raw_snapshots")
+    },
+    economicSeries:latestEconomicSeries(),
+    chileCompra:chileCompraSummary(),
+    sourceCoverage:coverage
+  };
+}
+
+function mapPayload(){
+  const regionStats=rows(`SELECT g.id,g.name,COUNT(t.id) transactions,COALESCE(SUM(t.amount),0) transaction_amount
+    FROM geo_areas g LEFT JOIN transactions t ON t.geo_area_id=g.id AND t.source_id='chilecompra'
+    WHERE g.geo_type='region' GROUP BY g.id,g.name`);
+  const stats=new Map(regionStats.map(r=>[r.id,r]));
+  const areas=rows(`SELECT id,code,name,geo_type,geometry_json FROM geo_areas WHERE geometry_json IS NOT NULL`);
+  const points=rows(`SELECT t.id,t.title label,t.category,t.occurred_at date,t.amount value,t.currency unit,g.name geo_name,g.geo_type,g.centroid_lat lat,g.centroid_lon lon
+    FROM transactions t JOIN geo_areas g ON g.id=t.geo_area_id
+    WHERE t.source_id='chilecompra' AND g.centroid_lat IS NOT NULL AND g.centroid_lon IS NOT NULL
+    ORDER BY t.id DESC LIMIT 500`);
+  return {type:'FeatureCollection',features:[
+    ...areas.map(r=>{const s=stats.get(r.id) as any;return {type:'Feature',geometry:JSON.parse(r.geometry_json),properties:{kind:'area',id:r.id,code:r.code,label:r.name,geo_name:r.name,geo_type:r.geo_type,transactions:Number(s?.transactions||0),transaction_amount:Number(s?.transaction_amount||0)}}}),
+    ...points.map(r=>({type:'Feature',geometry:{type:'Point',coordinates:[r.lon,r.lat]},properties:{kind:'transaction',...r,lat:undefined,lon:undefined}}))
+  ]};
 }
 
 const server=Bun.serve({
@@ -85,19 +141,11 @@ const server=Bun.serve({
     const url=new URL(req.url);
     if(url.pathname==="/api/health") return json({ok:true,time:new Date().toISOString()});
     if(url.pathname==="/api/sources") return json(SOURCES);
-    if(url.pathname==="/api/summary") return json({
+    if(url.pathname==="/api/progress") return json(progressPayload());
+    if(url.pathname==="/api/summary") return json(cached('summary',60000,()=>({
       sources:num("SELECT count(*) n FROM sources"),catalogItems:num("SELECT count(*) n FROM source_catalog_items"),resources:num("SELECT count(*) n FROM source_resources"),sourceRecords:num("SELECT count(*) n FROM source_records"),transactions:num("SELECT count(*) n FROM transactions"),projects:num("SELECT count(*) n FROM projects"),observations:num("SELECT count(*) n FROM observations"),metrics:num("SELECT count(*) n FROM metric_definitions"),snapshots:num("SELECT count(*) n FROM raw_snapshots"),resourceStatus:Object.fromEntries(rows(`SELECT sync_status,count(*) n FROM source_resources GROUP BY sync_status`).map(r=>[r.sync_status,Number(r.n)]))
-    });
-    if(url.pathname==="/api/dashboard"){
-      const coverage=sourceCoverage();
-      const recentRuns=rows(`SELECT id,source_id,started_at,finished_at,status,message,records_seen,records_written FROM ingest_runs ORDER BY id DESC LIMIT 8`);
-      const activeRuns=rows(`SELECT id,source_id,started_at,status,message,records_seen,records_written FROM ingest_runs WHERE status='running' ORDER BY id DESC LIMIT 8`);
-      return json({
-        generatedAt:new Date().toISOString(),
-        totals:{sources:num("SELECT count(*) n FROM sources"),populatedSources:coverage.filter(x=>x.active).length,datasets:num("SELECT count(*) n FROM source_catalog_items"),resources:num("SELECT count(*) n FROM source_resources"),sourceRecords:num("SELECT count(*) n FROM source_records"),observations:num("SELECT count(*) n FROM observations"),transactions:num("SELECT count(*) n FROM transactions"),metrics:num("SELECT count(*) n FROM metric_definitions"),snapshots:num("SELECT count(*) n FROM raw_snapshots")},
-        economicSeries:latestEconomicSeries(),chileCompra:chileCompraSummary(),sourceCoverage:coverage,connectorProgress:connectorProgress(),recentRuns,activeRuns
-      });
-    }
+    })));
+    if(url.pathname==="/api/dashboard") return json(cached('dashboard',60000,dashboardPayload));
     if(url.pathname==="/api/transactions"){
       const source=url.searchParams.get("source"); const limit=Math.min(Number(url.searchParams.get("limit") ?? 100),1000);
       return source?json(rows(`SELECT * FROM transactions WHERE source_id=? ORDER BY occurred_at DESC,id DESC LIMIT ?`,source,limit)):json(rows(`SELECT * FROM transactions ORDER BY occurred_at DESC,id DESC LIMIT ?`,limit));
@@ -111,27 +159,11 @@ const server=Bun.serve({
     }
     if(url.pathname==="/api/metrics"){
       const source=url.searchParams.get("source"); const limit=Math.min(Number(url.searchParams.get("limit") ?? 500),5000);
-      if(source) return json(rows(`SELECT m.external_id metric,m.title,m.frequency,m.geo_scope,count(o.id) observations,min(o.observed_at) first_date,max(o.observed_at) last_date FROM metric_definitions m LEFT JOIN observations o ON o.source_id=m.source_id AND o.metric=m.external_id WHERE m.source_id=? GROUP BY m.id ORDER BY m.title LIMIT ?`,source,limit));
+      if(source) return json(rows(`SELECT external_id metric,title,frequency,geo_scope,unit FROM metric_definitions WHERE source_id=? ORDER BY title LIMIT ?`,source,limit));
       return json(rows(`SELECT * FROM metric_definitions ORDER BY source_id,title LIMIT ?`,limit));
     }
-    if(url.pathname==="/api/map/features"){
-      const mapRows=rows(`
-        SELECT 'transaction' kind,t.id,t.title label,t.category,t.occurred_at date,t.amount value,t.currency unit,g.name geo_name,g.geo_type,g.centroid_lat lat,g.centroid_lon lon
-        FROM transactions t JOIN geo_areas g ON g.id=t.geo_area_id
-        WHERE g.centroid_lat IS NOT NULL AND g.centroid_lon IS NOT NULL
-        UNION ALL
-        SELECT 'observation' kind,o.id,COALESCE(m.title,o.metric) label,o.metric category,o.observed_at date,o.value_number value,COALESCE(m.unit,o.unit) unit,g.name geo_name,g.geo_type,g.centroid_lat lat,g.centroid_lon lon
-        FROM observations o JOIN geo_areas g ON g.id=o.geo_area_id LEFT JOIN metric_definitions m ON m.source_id=o.source_id AND m.external_id=o.metric
-        WHERE g.geo_type!='country' AND g.centroid_lat IS NOT NULL AND g.centroid_lon IS NOT NULL
-        ORDER BY date DESC LIMIT 5000`);
-      const areas=rows(`SELECT g.id,g.code,g.name,g.geo_type,g.geometry_json,
-        (SELECT count(*) FROM transactions t WHERE t.geo_area_id=g.id AND t.source_id='chilecompra') transactions,
-        (SELECT COALESCE(sum(t.amount),0) FROM transactions t WHERE t.geo_area_id=g.id AND t.source_id='chilecompra') transaction_amount,
-        (SELECT count(*) FROM observations o WHERE o.geo_area_id=g.id) observations
-        FROM geo_areas g WHERE g.geometry_json IS NOT NULL`);
-      return json({type:"FeatureCollection",features:[...areas.map(r=>({type:"Feature",geometry:JSON.parse(r.geometry_json),properties:{kind:"area",id:r.id,code:r.code,label:r.name,geo_name:r.name,geo_type:r.geo_type,transactions:r.transactions,transaction_amount:r.transaction_amount,observations:r.observations}})),...mapRows.map(r=>({type:"Feature",geometry:{type:"Point",coordinates:[r.lon,r.lat]},properties:{...r,lat:undefined,lon:undefined}}))]});
-    }
-    if(url.pathname==="/api/geo/areas") return json(rows(`SELECT id,geo_type,code,name,parent_id,centroid_lat,centroid_lon,geometry_json FROM geo_areas ORDER BY geo_type,name LIMIT 10000`));
+    if(url.pathname==="/api/map/features") return json(cached('map',300000,mapPayload));
+    if(url.pathname==="/api/geo/areas") return json(cached('areas',300000,()=>rows(`SELECT id,geo_type,code,name,parent_id,centroid_lat,centroid_lon,geometry_json FROM geo_areas ORDER BY geo_type,name LIMIT 10000`)));
     if(url.pathname==="/api/runs") return json(rows(`SELECT * FROM ingest_runs ORDER BY id DESC LIMIT 100`));
     const filePath=url.pathname==="/"?"public/index.html":`public${url.pathname}`; const file=Bun.file(filePath); if(await file.exists()) return new Response(file); return new Response("Not found",{status:404});
   }
