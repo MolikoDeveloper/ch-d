@@ -20,8 +20,14 @@ export function resolveGeoArea(code?:string|null,name?:string|null){if(code){con
 
 export async function syncOfficialRegions(){
  seedGeography();
- const endpoint=process.env.CHILE_REGIONS_GEOJSON_URL||'https://esri.ciren.cl/server/rest/services/Hosted/REGIONES_COD_INT/FeatureServer/0/query?where=1%3D1&outFields=*&outSR=4326&f=geojson';
- const res=await fetch(endpoint);if(!res.ok)throw new Error(`Geo HTTP ${res.status}`);const fc=await res.json() as any;let updated=0;
- for(const f of fc.features||[]){const p=f.properties||{};const code=String(p.COD_REGI??p.COD_REGION??p.CUT_REG??p.REGION_COD??'');const name=String(p.REGION??p.NOM_REG??p.NOMBRE??'');const id=resolveGeoArea(code,name);if(id&&f.geometry){db.prepare(`UPDATE geo_areas SET geometry_json=? WHERE id=?`).run(JSON.stringify(f.geometry),id);updated++}}
+ const base=process.env.CHILE_REGIONS_GEOJSON_URL||'https://esri.ciren.cl/server/rest/services/Hosted/REGIONES_COD_INT/FeatureServer/0/query?where=1%3D1&outFields=*&outSR=4326&f=geojson';
+ let res=await fetch(base);if(!res.ok)throw new Error(`Geo HTTP ${res.status}`);let fc=await res.json() as any;
+ if(fc.error||!Array.isArray(fc.features)){const fallback=base.replace('f=geojson','f=json');res=await fetch(fallback);if(!res.ok)throw new Error(`Geo HTTP ${res.status}`);fc=await res.json()}
+ let updated=0;
+ for(const f of fc.features||[]){
+   const p=f.properties??f.attributes??{};const code=String(p.COD_REGI??p.COD_REGION??p.CUT_REG??p.REGION_COD??'');const name=String(p.REGION??p.NOM_REG??p.NOMBRE??'');const id=resolveGeoArea(code,name);if(!id||!f.geometry)continue;
+   const geometry=f.geometry.type?f.geometry:(Array.isArray(f.geometry.rings)?{type:'Polygon',coordinates:f.geometry.rings}:null);
+   if(geometry){db.prepare(`UPDATE geo_areas SET geometry_json=? WHERE id=?`).run(JSON.stringify(geometry),id);updated++}
+ }
  return {features:(fc.features||[]).length,updated};
 }
