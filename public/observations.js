@@ -1,14 +1,7 @@
 const $=q=>document.querySelector(q);
 const fmt=new Intl.NumberFormat('es-CL');
-async function load(){
-  const metrics=await fetch('/api/metrics?source=bcentral&limit=5000').then(r=>r.json());
-  const obs=await fetch('/api/observations?source=bcentral&limit=250').then(r=>r.json());
-  $('#metricCount').textContent=fmt.format(metrics.length);
-  $('#observations').textContent=fmt.format(obs.length);
-  const s=$('#metricFilter');
-  for(const m of metrics){const o=document.createElement('option');o.value=m.metric;o.textContent=m.metric;s.appendChild(o)}
-  const b=$('#observationRows');b.replaceChildren();
-  for(const x of obs){const r=document.createElement('tr');for(const v of [x.observed_at?.slice(0,10)||'—',x.source_id,x.metric,x.value_number??x.value_text??'—',x.unit||'—']){const c=document.createElement('td');c.textContent=String(v);r.appendChild(c)}b.appendChild(r)}
-  $('#latestObservation').textContent=obs[0]?.observed_at?.slice(0,10)||'—';
-}
-load().catch(console.error);
+function apiUrl(){const p=new URLSearchParams({source:'bcentral',limit:'250'});const m=$('#metricFilter').value,f=$('#fromDate').value,t=$('#toDate').value;if(m)p.set('metric',m);if(f)p.set('from',f);if(t)p.set('to',t);return `/api/observations?${p}`}
+async function loadMetrics(){const metrics=await fetch('/api/metrics?source=bcentral&limit=5000').then(r=>r.json());$('#metricCount').textContent=fmt.format(metrics.length);const s=$('#metricFilter'),old=s.value;s.replaceChildren();const all=document.createElement('option');all.value='';all.textContent='Todas las métricas';s.appendChild(all);for(const m of metrics){const o=document.createElement('option');o.value=m.metric;o.textContent=`${m.metric} (${fmt.format(m.observations)})`;s.appendChild(o)}if([...s.options].some(o=>o.value===old))s.value=old}
+async function loadRows(){const obs=await fetch(apiUrl()).then(r=>r.json());const b=$('#observationRows');b.replaceChildren();for(const x of obs){const r=document.createElement('tr');for(const v of [x.observed_at?.slice(0,10)||'—',x.source_id,x.metric,x.value_number??x.value_text??'—',x.unit||'—']){const c=document.createElement('td');c.textContent=String(v);r.appendChild(c)}b.appendChild(r)}$('#latestObservation').textContent=obs[0]?.observed_at?.slice(0,10)||'—'}
+async function load(){const sum=await fetch('/api/summary').then(r=>r.json());$('#observations').textContent=fmt.format(sum.observations);await Promise.all([loadMetrics(),loadRows()])}
+$('#metricFilter').addEventListener('change',loadRows);$('#applySeries').addEventListener('click',loadRows);load().catch(console.error);setInterval(()=>load().catch(console.error),10000);
