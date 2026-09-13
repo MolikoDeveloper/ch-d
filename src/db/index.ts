@@ -39,7 +39,7 @@ export function initDb() {
       for (const s of SOURCES) stmt.run({$id:s.id,$name:s.name,$institution:s.institution,$domain:s.domain,$baseUrl:s.baseUrl,$auth:s.auth,$automatic:s.automatic?1:0,$metadata:JSON.stringify(s)});
     })();
 
-    const { seedGeography, countryGeoAreaId } = await import("../geo");
+    const { seedGeography, countryGeoAreaId, resolveGeoArea } = await import("../geo");
     seedGeography();
 
     db.exec(`
@@ -53,6 +53,19 @@ export function initDb() {
         geo_scope=excluded.geo_scope,metadata_json=excluded.metadata_json;
     `);
     db.prepare(`UPDATE observations SET geo_area_id=? WHERE source_id='bcentral' AND geo_area_id IS NULL`).run(countryGeoAreaId());
+
+    const pending=db.query(`SELECT id,payload_json FROM transactions WHERE source_id='chilecompra' AND geo_area_id IS NULL`).all() as Array<{id:number,payload_json:string}>;
+    const setGeo=db.prepare(`UPDATE transactions SET geo_area_id=? WHERE id=?`);
+    db.transaction(()=>{
+      for(const row of pending){
+        try{
+          const oc=JSON.parse(row.payload_json||"{}"); const buyer=oc.Comprador??{};
+          const region=buyer.RegionUnidad??buyer.Region??buyer.NombreRegion??oc.Region??null;
+          const geoId=region?resolveGeoArea(null,String(region)):null;
+          if(geoId) setGeo.run(geoId,row.id);
+        }catch{}
+      }
+    })();
   });
 }
 
