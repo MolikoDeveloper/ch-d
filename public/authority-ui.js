@@ -4,7 +4,7 @@ let requestSerial=0;
 
 function cell(text,cls){const el=document.createElement('div');if(cls)el.className=cls;el.textContent=text;return el}
 function positionLabel(authority){return authority.position||({mayor:'Alcalde/Alcaldesa',councillor:'Concejal/Concejala'}[authority.role]||authority.role||'Cargo no informado')}
-function ageLabel(authority){return Number.isFinite(Number(authority.age))?`${Number(authority.age)} años`:'No informada'}
+function ageLabel(authority){return authority.age!=null&&Number.isFinite(Number(authority.age))?`${Number(authority.age)} años`:'No informada'}
 
 async function enhanceAuthorities(){
   const code=communeSelect?.value;
