@@ -19,11 +19,17 @@ export function territoriesPayload(){
     ORDER BY CAST(code AS INTEGER),name
   `);
   const communes=rows(`
+    WITH counts AS (
+      SELECT geo_area_id,COUNT(*) indicator_rows
+      FROM observations
+      WHERE source_id='sinim' AND geo_area_id IS NOT NULL
+      GROUP BY geo_area_id
+    )
     SELECT c.id,c.code,c.name,c.parent_id region_id,r.code region_code,r.name region_name,
-           c.centroid_lat,c.centroid_lon,
-           (SELECT COUNT(*) FROM observations o WHERE o.source_id='sinim' AND o.geo_area_id=c.id) indicator_rows
+           c.centroid_lat,c.centroid_lon,COALESCE(x.indicator_rows,0) indicator_rows
     FROM geo_areas c
     LEFT JOIN geo_areas r ON r.id=c.parent_id
+    LEFT JOIN counts x ON x.geo_area_id=c.id
     WHERE c.source_id='sinim' AND c.geo_type='commune'
     ORDER BY r.name,c.name
   `);
@@ -33,14 +39,10 @@ export function territoriesPayload(){
 export function indicatorCatalog(sourceId:string){
   if(!["sinim","ine","energia-abierta","bcentral"].includes(sourceId))return [];
   return rows(`
-    SELECT m.external_id metric,m.title,m.subcategory,m.unit,m.frequency,m.geo_scope,
-           COUNT(o.id) coverage,MAX(o.observed_at) latest
-    FROM metric_definitions m
-    LEFT JOIN observations o ON o.source_id=m.source_id AND o.metric=m.external_id
-    WHERE m.source_id=?
-    GROUP BY m.id,m.external_id,m.title,m.subcategory,m.unit,m.frequency,m.geo_scope
-    HAVING coverage>0
-    ORDER BY COALESCE(m.subcategory,''),m.title
+    SELECT external_id metric,title,subcategory,unit,frequency,geo_scope
+    FROM metric_definitions
+    WHERE source_id=?
+    ORDER BY COALESCE(subcategory,''),title
   `,sourceId);
 }
 
