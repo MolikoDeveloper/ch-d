@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Estado de datos · Chile Transparente</title>
+<link rel="stylesheet" href="/styles.css"/>
+<link rel="stylesheet" href="/panorama.css"/>
+</head>
+<body>
+<header>
+  <div class="brand"><span class="mark">CL</span><div><b>Chile Transparente</b><small>Diagnóstico técnico</small></div></div>
+  <nav><a class="status-back" href="/">← Volver al Panorama</a></nav>
+</header>
+<main class="status-shell">
+  <section class="panel status-panel">
+    <div class="hero-row">
+      <div><h1>Estado de datos</h1><p class="muted">Vista técnica del proceso de sincronización. Esta información no forma parte del Panorama público.</p></div>
+      <div class="source-badge"><span class="sync-dot"></span><div><b id="statusLabel">Consultando…</b><small id="statusTime">—</small></div></div>
+    </div>
+    <div class="status-grid">
+      <section class="status-card"><div class="dash-head"><div><h2>Conectores</h2><small>Progreso y último estado</small></div></div><div id="connectorProgress" class="connector-progress"><div class="empty-state">Cargando…</div></div></section>
+      <section class="status-card"><div class="dash-head"><div><h2>Ejecuciones recientes</h2><small>Historial de ingesta</small></div></div><div id="recentRuns" class="activity-list"><div class="empty-state">Cargando…</div></div></section>
+    </div>
+    <p class="status-note">Esta vista puede actualizarse con frecuencia mientras una sincronización está activa. El Panorama público usa una cadencia mucho menor.</p>
+  </section>
+</main>
+<script type="module" src="/status.js"></script>
+</body></html>
