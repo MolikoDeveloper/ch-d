@@ -7,6 +7,7 @@ type Heading={at:number;name:string;year:number|null};
 function decodeHtml(s:string){return s.replace(/&nbsp;/gi," ").replace(/&amp;/gi,"&").replace(/&quot;/gi,'"').replace(/&#39;|&apos;/gi,"'").replace(/&deg;/gi,"°").replace(/&sup2;/gi,"²").replace(/&#(\d+);/g,(_,n)=>String.fromCharCode(Number(n)))}
 export function htmlText(html:string){return decodeHtml(html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,"").replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi,"").replace(/<[^>]+>/g," ").replace(/\s+/g," ").trim())}
 function numeric(v:string){const s=v.trim().replace(/\s/g,"").replace(/\.(?=\d{3}(?:\D|$))/g,"").replace(",",".").replace(/%$/,"");if(!s||/^(?:n\/?a|s\/?d|sin dato|sin dato oficial|no aplica|no recepcionado|descontinuado|-+)$/i.test(s))return null;const n=Number(s);return Number.isFinite(n)?n:null}
+function cleanTitle(v:string){return v.replace(/\s*\((?:[^)]*(?:indicador\s+disponible|datos?\s+desde|disponible\s+(?:a\s+partir|desde)|serie\s+disponible)[^)]*)\)\s*/gi," ").replace(/\s+/g," ").trim()}
 function yearIn(v:string){const m=v.match(/\b(20\d{2})\b/);return m?Number(m[1]):null}
 function headingAt(headings:Heading[],at:number){let section:Heading={at:0,name:"Ficha comunal",year:null};for(const h of headings){if(h.at>at)break;if(h.name)section=h}return section}
 function coordinatesFrom(html:string):SinimCoordinates|null{const m=html.match(/[?&](?:amp;)?ll=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/i);if(!m)return null;const lat=Number(m[1]),lon=Number(m[2]);return Number.isFinite(lat)&&Number.isFinite(lon)?{lat,lon}:null}
@@ -25,7 +26,7 @@ export function parseSinimProfile(html:string){
   const profileYear=profileYearFrom(html,headings);
   const observations:SinimObservation[]=[];const seen=new Set<string>();
   const add=(at:number,titleRaw:string,unitRaw:string|null,valueRaw:string)=>{
-    const title=htmlText(titleRaw),unit=unitRaw?htmlText(unitRaw)||null:null,value=htmlText(valueRaw);
+    const originalTitle=htmlText(titleRaw),title=cleanTitle(originalTitle),unit=unitRaw?htmlText(unitRaw)||null:null,value=htmlText(valueRaw);
     if(!title||!value||/^(informaci[oó]n|dato|descripci[oó]n|unidad medida)$/i.test(title)||/^(comunal|municipal|nacional)$/i.test(value))return;
     const heading=headingAt(headings,at),key=`${heading.name}|${title}|${value}`;if(seen.has(key))return;seen.add(key);
     const n=numeric(value),periodYear=heading.year??profileYear,periodBasis=heading.year?"section":"profile";
@@ -34,8 +35,12 @@ export function parseSinimProfile(html:string){
   for(const table of html.matchAll(/<table\b[^>]*>([\s\S]*?)<\/table>/gi))for(const row of table[1].matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)){const cells=[...row[1].matchAll(/<t[dh]\b[^>]*>([\s\S]*?)<\/t[dh]>/gi)].map(c=>c[1]);if(cells.length>=3)add(table.index??0,cells[0],cells[1],cells[2])}
   const divRow=/<div\s+class=["'][^"']*col_info_tit[^"']*["'][^>]*>([\s\S]*?)<\/div>\s*<div\s+class=["'][^"']*col_info_medida[^"']*["'][^>]*>([\s\S]*?)<\/div>\s*<div\s+class=["'][^"']*col_info_comunal[^"']*["'][^>]*>([\s\S]*?)<\/div>/gi;
   for(const row of html.matchAll(divRow))add(row.index??0,row[1],row[2],row[3]);
+
+  // Some SINIM highlight cards use h4/h3 pairs. Keep only genuinely numeric
+  // values here; names such as "Alcalde de X" are entities, not indicators.
   const highlighted=/<h4[^>]*>([^<:]+):?\s*<\/h4>\s*<h3[^>]*>([\s\S]*?)<\/h3>/gi;
-  for(const row of html.matchAll(highlighted))add(row.index??0,row[1],null,row[2]);
+  for(const row of html.matchAll(highlighted)){const value=htmlText(row[2]);if(numeric(value)!=null)add(row.index??0,row[1],null,row[2])}
+
   const authorities:SinimAuthority[]=[];
   const mayor=html.match(/<div\s+class=["']nombre_alcalde["'][^>]*>[\s\S]*?<h4[^>]*>Alcalde[^<]*<\/h4>\s*<h3[^>]*>([\s\S]*?)<\/h3>\s*<h4[^>]*>([\s\S]*?)<\/h4>/i);
   if(mayor){const name=htmlText(mayor[1]),party=htmlText(mayor[2]);if(name)authorities.push({role:"mayor",name,party:party||null})}
