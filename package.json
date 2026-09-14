@@ -15,6 +15,7 @@
     "sync:bcentral": "bun src/cli/index.ts sync bcentral",
     "sync:energia": "bun src/cli/index.ts sync energia-abierta",
     "sync:sinim": "bun src/cli/index.ts sync sinim",
+    "sync:rsh": "bun src/cli/sync-rsh.ts",
     "sync:ine": "bun src/cli/index.ts sync ine",
     "sync:geo": "bun src/cli/index.ts sync geo",
     "stats": "bun src/cli/index.ts stats",
