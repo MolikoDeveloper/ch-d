@@ -7,6 +7,7 @@
     "dev": "bun --watch src/web/server.ts",
     "start": "bun src/web/server.ts",
     "db:init": "bun src/cli/index.ts db:init",
+    "db:purge-raw": "bun src/cli/index.ts db:purge-raw",
     "sources:list": "bun src/cli/index.ts sources:list",
     "sync": "bun src/cli/index.ts sync",
     "sync:datos": "bun src/cli/index.ts sync datos-gob",
