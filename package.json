@@ -21,6 +21,7 @@
     "sync:servel": "bun src/cli/index.ts sync servel",
     "sync:presupuesto": "bun src/cli/index.ts sync presupuesto-abierto",
     "sync:presidencia": "bun src/cli/index.ts sync presidencia",
+    "sync:approval": "bun src/cli/index.ts sync approval",
     "sync:ine": "bun src/cli/index.ts sync ine",
     "sync:geo": "bun src/cli/index.ts sync geo",
     "stats": "bun src/cli/index.ts stats",
