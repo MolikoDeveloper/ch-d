@@ -21,28 +21,6 @@ function sinimPeriodLabel(row:any){
   return row.observed_at??null;
 }
 
-function jsonObject(value:unknown){
-  if(typeof value!=="string"||!value)return{} as Record<string,unknown>;
-  try{const parsed=JSON.parse(value);return parsed&&typeof parsed==="object"?parsed as Record<string,unknown>:{} as Record<string,unknown>}catch{return{} as Record<string,unknown>}
-}
-function normalizedBirthDate(row:any){
-  if(row.birth_date)return String(row.birth_date).slice(0,10);
-  const person=jsonObject(row.person_metadata),relation=jsonObject(row.relationship_metadata);
-  for(const source of[person,relation]){
-    for(const key of["birthDate","birth_date","fechaNacimiento","fecha_nacimiento"]){
-      const value=source[key];if(typeof value==="string"&&/^\d{4}-\d{2}-\d{2}/.test(value))return value.slice(0,10);
-    }
-  }
-  return null;
-}
-function ageFromBirthDate(value:string|null){
-  if(!value)return null;
-  const [year,month,day]=value.split("-").map(Number);if(!year||!month||!day)return null;
-  const now=new Date();let age=now.getFullYear()-year;
-  const currentMonth=now.getMonth()+1,currentDay=now.getDate();
-  if(currentMonth<month||(currentMonth===month&&currentDay<day))age--;
-  return age>=0&&age<130?age:null;
-}
 function authorityPosition(role:string){return role==="mayor"?"Alcalde/Alcaldesa":role==="councillor"?"Concejal/Concejala":role}
 
 export function territoriesPayload(){
@@ -79,23 +57,17 @@ export function communeProfile(code:string){
     ORDER BY COALESCE(subcategory,''),title
   `,commune.id).map(x=>({...x,observed_at:sinimPeriodLabel(x),payload_json:undefined}));
   const authorities=rows(`
-    SELECT r.relation_type role,p.canonical_name name,p.birth_date,p.metadata_json person_metadata,
-           json_extract(r.metadata_json,'$.party') party,r.metadata_json relationship_metadata
+    SELECT r.relation_type role,p.canonical_name name,json_extract(r.metadata_json,'$.party') party
     FROM relationships r JOIN persons p ON p.source_id='sinim' AND p.external_id=r.to_id
     WHERE r.source_id='sinim' AND r.from_type='commune' AND r.from_id=? AND r.relation_type IN ('mayor','councillor')
     ORDER BY CASE r.relation_type WHEN 'mayor' THEN 0 ELSE 1 END,p.canonical_name
-  `,code).map(row=>{
-    const birthDate=normalizedBirthDate(row);
-    return{
-      role:row.role,
-      position:authorityPosition(row.role),
-      name:row.name,
-      party:row.party||null,
-      birthDate,
-      age:ageFromBirthDate(birthDate),
-      source:SOURCE_NAMES.sinim,
-    };
-  });
+  `,code).map(row=>({
+    role:row.role,
+    position:authorityPosition(row.role),
+    name:row.name,
+    party:row.party||null,
+    source:SOURCE_NAMES.sinim,
+  }));
   const periods=[...new Set(indicators.map(x=>x.observed_at).filter(Boolean))];
   return{commune,source:SOURCE_NAMES.sinim,periods,authorities,indicators};
 }
