@@ -8,6 +8,7 @@ function node(tag,text,cls){const x=document.createElement(tag);if(cls)x.classNa
 function pct(v){return v==null?'—':`${fmt.format(Number(v))}%`}
 function num(v){return v==null?'—':intFmt.format(Number(v))}
 function metric(items,id){return items.find(x=>x.metric===id)}
+function periodLabel(v){if(!v)return'Período no informado';const s=String(v);return /^\d{4}-\d{2}/.test(s)?`Período ${s.slice(0,7)}`:`Período ${s}`}
 
 async function renderSocial(){
   const code=commune?.value;if(!code||!detail)return;
@@ -18,11 +19,13 @@ async function renderSocial(){
   const items=data.socialIndicators||[];if(!items.length)return;
   detail.querySelectorAll('.social-section').forEach(x=>x.remove());
 
+  const totalPeople=metric(items,'rsh:persons:commune:total:count');
   const section=node('section',null,'social-section');section.dataset.code=code;
-  const head=node('div',null,'social-heading');head.append(node('h4','Situación socioeconómica'),node('small',data.socialSource||'Registro Social de Hogares'));section.append(head);
+  const head=node('div',null,'social-heading');
+  const title=node('div');title.append(node('h4','Situación socioeconómica'),node('small',`${data.socialSource||'Registro Social de Hogares'} · ${periodLabel(totalPeople?.observed_at)}`));head.append(title);section.append(head);
 
   const values=[
-    ['Personas presentes en RSH',num(metric(items,'rsh:persons:commune:total:count')?.value_number)],
+    ['Personas presentes en RSH',num(totalPeople?.value_number)],
     ['Tramos 0–70',pct(metric(items,'rsh:persons:commune:0-70:pct')?.value_number)],
     ['Tramos 71–100',pct(metric(items,'rsh:persons:commune:71-100:pct')?.value_number)],
     ['Tramo 91–100',pct(metric(items,'rsh:persons:commune:91-100:pct')?.value_number)],
