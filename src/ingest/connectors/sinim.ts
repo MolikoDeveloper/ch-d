@@ -16,9 +16,10 @@ function seedCommunes(html:string){
   const unique=new Map<string,string>();
   for(const m of matches){const name=m[1].replace(/&[a-z]+;/gi," ").replace(/\s+/g," ").trim();if(name&&!/seleccione/i.test(name))unique.set(m[2],name)}
   const ins=db.prepare(`INSERT INTO geo_areas(geo_type,code,name,parent_id,source_id,external_id) VALUES('commune',?,?,?,'sinim',?) ON CONFLICT(source_id,external_id) DO UPDATE SET name=excluded.name,parent_id=excluded.parent_id`);
-  const alias=db.prepare(`INSERT OR REPLACE INTO geo_aliases(alias,normalized_alias,geo_area_id) VALUES(?,?,?)`);
+  const aliasKeep=db.prepare(`INSERT OR IGNORE INTO geo_aliases(alias,normalized_alias,geo_area_id) VALUES(?,?,?)`);
+  const aliasExplicit=db.prepare(`INSERT OR REPLACE INTO geo_aliases(alias,normalized_alias,geo_area_id) VALUES(?,?,?)`);
   let written=0;
-  for(const[code,name]of unique){const parent=resolveGeoArea(code.slice(0,2),null);ins.run(code,name,parent,`COM-${code}`);const g=db.query(`SELECT id FROM geo_areas WHERE source_id='sinim' AND external_id=?`).get(`COM-${code}`)as{id:number};for(const a of[name,code])alias.run(a,normalizeGeoName(a),g.id);written++}
+  for(const[code,name]of unique){const parent=resolveGeoArea(code.slice(0,2),null);ins.run(code,name,parent,`COM-${code}`);const g=db.query(`SELECT id FROM geo_areas WHERE source_id='sinim' AND external_id=?`).get(`COM-${code}`)as{id:number};aliasKeep.run(name,normalizeGeoName(name),g.id);aliasExplicit.run(code,normalizeGeoName(code),g.id);const explicit=`Comuna de ${name}`;aliasExplicit.run(explicit,normalizeGeoName(explicit),g.id);written++}
   return written;
 }
 
@@ -45,7 +46,7 @@ export async function syncSinim(){
         let resourceWritten=0;
         db.transaction(()=>{
           for(const row of rows){
-            const code=field(row,/(codigo territorial|cod comuna|codigo comuna|cut comuna|codigo municipio)/i);const name=field(row,/(^comuna$|municipio|nombre comuna)/i);const geo=resolveGeoArea(code?String(code):null,name?String(name):null);if(!geo)continue;
+            const code=field(row,/(codigo territorial|cod comuna|codigo comuna|cut comuna|codigo municipio)/i);const name=field(row,/(^comuna$|municipio|nombre comuna)/i);const geo=resolveGeoArea(code?String(code):null,name?`Comuna de ${String(name)}`:null);if(!geo)continue;
             const year=yearFrom(field(row,/(^ano$|^año$|year|periodo)/i),datasetYear)??datasetYear;const observed=year?`${year}-12-31`:null;
             for(const[col,val]of Object.entries(row)){if(SKIP_KEYS.test(normalizeGeoName(col)))continue;const n=numeric(val);if(n==null)continue;const metric=metricId(r.external_id,col);metricStmt.run(metric,col,r.dataset_title,"municipal",r.dataset_title,null,"annual",JSON.stringify({datasetId:r.dataset_id,resourceId:r.external_id,column:col,via:"datos.gob.cl",publisher:r.publisher}));const ext=`${r.external_id}:${metric}:${geo}:${observed??'na'}`;obsStmt.run(ext,observed,metric,n,null,null,geo,"commune",String(code??name??geo),snap.snapshotId);written++;resourceWritten++}
           }
