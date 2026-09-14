@@ -5,6 +5,7 @@ const one=(q:string,...p:any[])=>db.query(q).get(...p) as any|null;
 
 const SOURCE_NAMES:Record<string,string>={
   sinim:"SINIM / SUBDERE",
+  rsh:"Registro Social de Hogares / MDSF",
   ine:"Instituto Nacional de Estadísticas (INE)",
   "energia-abierta":"Comisión Nacional de Energía (CNE)",
   bcentral:"Banco Central de Chile",
@@ -35,8 +36,51 @@ export function territoriesPayload(){
 }
 
 export function indicatorCatalog(sourceId:string){
-  if(!["sinim","ine","energia-abierta","bcentral"].includes(sourceId))return[];
+  if(!["sinim","rsh","ine","energia-abierta","bcentral"].includes(sourceId))return[];
   return rows(`SELECT external_id metric,title,subcategory,unit,frequency,geo_scope FROM metric_definitions WHERE source_id=? AND geo_scope IN ('region','commune') ORDER BY COALESCE(subcategory,''),title`,sourceId);
+}
+
+function latestIndicators(sourceId:string,geoAreaId:number,scope?:string){
+  const scopeClause=scope?"AND m.geo_scope=?":"";
+  const params=scope?[sourceId,geoAreaId,scope]:[sourceId,geoAreaId];
+  return rows(`
+    WITH ranked AS (
+      SELECT m.external_id metric,m.title,m.subcategory,m.unit,m.frequency,m.geo_scope,o.observed_at,o.value_number,o.value_text,
+             ROW_NUMBER() OVER(PARTITION BY o.metric ORDER BY o.observed_at DESC,o.id DESC) rn
+      FROM observations o JOIN metric_definitions m ON m.source_id=o.source_id AND m.external_id=o.metric
+      WHERE o.source_id=? AND o.geo_area_id=? ${scopeClause}
+    )
+    SELECT metric,title,subcategory,unit,frequency,geo_scope,observed_at,value_number,value_text FROM ranked WHERE rn=1
+    ORDER BY COALESCE(subcategory,''),title
+  `,...params);
+}
+
+function rshUnits(communeId:number){
+  const wanted=[
+    "rsh:persons:unit_vecinal:0-70:pct",
+    "rsh:persons:unit_vecinal:71-100:pct",
+    "rsh:persons:unit_vecinal:91-100:pct",
+    "rsh:persons:unit_vecinal:total:count",
+  ];
+  const placeholders=wanted.map(()=>"?").join(",");
+  const raw=rows(`
+    WITH ranked AS (
+      SELECT g.id,g.code,g.name,o.metric,o.value_number,o.observed_at,
+             ROW_NUMBER() OVER(PARTITION BY g.id,o.metric ORDER BY o.observed_at DESC,o.id DESC) rn
+      FROM geo_areas g JOIN observations o ON o.geo_area_id=g.id
+      WHERE g.geo_type='unit_vecinal' AND g.parent_id=? AND o.source_id='rsh' AND o.metric IN (${placeholders})
+    )
+    SELECT id,code,name,metric,value_number,observed_at FROM ranked WHERE rn=1 ORDER BY code,metric
+  `,communeId,...wanted);
+  const by=new Map<number,any>();
+  for(const r of raw){let item=by.get(r.id);if(!item){item={id:r.id,code:r.code,name:r.name,period:r.observed_at,totalPersons:null,lowerPct:null,higherPct:null,topPct:null};by.set(r.id,item)}
+    if(r.metric.includes(":total:count"))item.totalPersons=r.value_number;
+    else if(r.metric.includes(":0-70:pct"))item.lowerPct=r.value_number;
+    else if(r.metric.includes(":71-100:pct"))item.higherPct=r.value_number;
+    else if(r.metric.includes(":91-100:pct"))item.topPct=r.value_number;
+    if(String(r.observed_at)>String(item.period??""))item.period=r.observed_at;
+  }
+  return[...by.values()];
 }
 
 export function communeProfile(code:string){
@@ -61,19 +105,15 @@ export function communeProfile(code:string){
     FROM relationships r JOIN persons p ON p.source_id='sinim' AND p.external_id=r.to_id
     WHERE r.source_id='sinim' AND r.from_type='commune' AND r.from_id=? AND r.relation_type IN ('mayor','councillor')
     ORDER BY CASE r.relation_type WHEN 'mayor' THEN 0 ELSE 1 END,p.canonical_name
-  `,code).map(row=>({
-    role:row.role,
-    position:authorityPosition(row.role),
-    name:row.name,
-    party:row.party||null,
-    source:SOURCE_NAMES.sinim,
-  }));
+  `,code).map(row=>({role:row.role,position:authorityPosition(row.role),name:row.name,party:row.party||null,source:SOURCE_NAMES.sinim}));
+  const socialIndicators=latestIndicators("rsh",commune.id,"commune");
+  const socialUnits=rshUnits(commune.id);
   const periods=[...new Set(indicators.map(x=>x.observed_at).filter(Boolean))];
-  return{commune,source:SOURCE_NAMES.sinim,periods,authorities,indicators};
+  return{commune,source:SOURCE_NAMES.sinim,periods,authorities,indicators,socialSource:SOURCE_NAMES.rsh,socialIndicators,socialUnits};
 }
 
 export function indicatorMap(sourceId:string,metricId:string){
-  if(!["sinim","ine","energia-abierta","bcentral"].includes(sourceId))return null;
+  if(!["sinim","rsh","ine","energia-abierta","bcentral"].includes(sourceId))return null;
   const metric=one(`SELECT external_id metric,title,subcategory,unit,frequency,geo_scope FROM metric_definitions WHERE source_id=? AND external_id=?`,sourceId,metricId);if(!metric)return null;
   let values=rows(`
     WITH ranked AS (
