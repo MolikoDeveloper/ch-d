@@ -10,6 +10,7 @@ import { syncSii } from "../ingest/connectors/sii";
 import { syncServel } from "../ingest/connectors/servel";
 import { syncPresupuestoAbierto } from "../ingest/connectors/presupuesto-abierto";
 import { syncPresidencia } from "../ingest/connectors/presidencia";
+import { syncApproval } from "../ingest/connectors/approval";
 import { syncIne } from "../ingest/connectors/ine";
 import { syncBCentral } from "../ingest/connectors/bcentral";
 import { syncChileCompra } from "../ingest/connectors/chilecompra";
@@ -29,6 +30,8 @@ const FRESHNESS_HOURS:Record<string,number>={
   "presupuesto-abierto":6,
   "energia-abierta":24,
   presidencia:24*30,
+  criteria:24,
+  cadem:24,
   bcentral:3,
   chilecompra:1,
 };
@@ -38,6 +41,7 @@ function ageLabel(ms:number){const minutes=Math.max(0,Math.floor(ms/60000));if(m
 function ttl(sourceId:string){const envKey=`SYNC_TTL_${sourceId.toUpperCase().replace(/[^A-Z0-9]+/g,"_")}_HOURS`,configured=Number(process.env[envKey]);return Number.isFinite(configured)&&configured>=0?configured:(FRESHNESS_HOURS[sourceId]??24)}
 function latestRun(sourceId:string,kind?:"datos-catalog"){const clause=kind==="datos-catalog"?`AND (message IS NULL OR message='catalog' OR message LIKE 'catalog:%')`:"";return db.query(`SELECT status,finished_at,message FROM ingest_runs WHERE source_id=? ${clause} ORDER BY id DESC LIMIT 1`).get(sourceId) as RunRow|null}
 function freshnessSkip(sourceId:string,options:SyncAllOptions,kind?:"datos-catalog"){if(options.force)return undefined;const maxAge=ttl(sourceId),run=latestRun(sourceId,kind);if(!run||run.status!=="success"||!run.finished_at)return undefined;const age=Date.now()-Date.parse(run.finished_at);if(!Number.isFinite(age)||age<0||age>=maxAge*3600000)return undefined;return`ya actualizado hace ${ageLabel(age)} · TTL ${hoursLabel(maxAge)}`}
+function approvalSkip(options:SyncAllOptions){if(options.force)return undefined;const criteria=freshnessSkip("criteria",options),cadem=freshnessSkip("cadem",options);return criteria&&cadem?`Criteria y Cadem recientes · TTL ${hoursLabel(ttl("criteria"))}`:undefined}
 function geographySkip(options:SyncAllOptions){if(options.force)return undefined;const regions=Number((db.query(`SELECT COUNT(*) n FROM geo_areas WHERE geo_type='region'`).get()as any)?.n??0),communes=Number((db.query(`SELECT COUNT(*) n FROM geo_areas WHERE geo_type='commune' AND geometry_json IS NOT NULL`).get()as any)?.n??0);if(regions>=16&&communes>=330)return`cobertura ya cargada · regiones=${regions} comunas_con_polígono=${communes}`;return undefined}
 function datosResourcesSkip(options:SyncAllOptions){if(options.force)return undefined;const n=Number((db.query(`SELECT COUNT(*) n FROM source_resources WHERE sync_status IN ('pending','failed')`).get()as any)?.n??0);return n===0?"sin recursos pending/failed":undefined}
 
@@ -60,6 +64,7 @@ export async function syncAll(options:SyncAllOptions){
   await step("Presupuesto Abierto / DIPRES",()=>syncPresupuestoAbierto(),freshnessSkip("presupuesto-abierto",options));
   await step("Energía Abierta / CNE",()=>syncEnergiaAbierta(),freshnessSkip("energia-abierta",options));
   await step("Presidencia / lugares cívicos",()=>syncPresidencia(),freshnessSkip("presidencia",options));
+  await step("Encuestas de aprobación / Criteria + Cadem",()=>syncApproval(),approvalSkip(options));
 
   const bcSkip=process.env.BCCH_API_KEY?.trim()?freshnessSkip("bcentral",options):"falta BCCH_API_KEY";
   await step("Banco Central",()=>syncBCentral(),bcSkip);
