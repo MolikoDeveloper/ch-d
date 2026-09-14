@@ -28,7 +28,8 @@ function norm(v:unknown){return clean(v).normalize("NFD").replace(/[\u0300-\u036
 function htmlText(v:string){return v.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi," ").replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi," ").replace(/&amp;/gi,"&").replace(/&quot;/gi,'"').replace(/&#0*39;|&apos;/gi,"'").replace(/&nbsp;/gi," ").replace(/<[^>]+>/g," ").replace(/\s+/g," ").trim()}
 function numeric(v:unknown){if(typeof v==="number")return Number.isFinite(v)?v:null;let s=clean(v);if(!s||/^(?:-|—|s\/?i|n\/?a)$/i.test(s))return null;s=s.replace(/%/g,"").replace(/\s/g,"");if(/^[-+]?\d{1,3}(?:\.\d{3})+(?:,\d+)?$/.test(s))s=s.replace(/\./g,"").replace(",",".");else s=s.replace(",",".");const n=Number(s);return Number.isFinite(n)?n:null}
 function hash(value:string){const h=new Bun.CryptoHasher("sha256");h.update(value);return h.digest("hex").slice(0,24)}
-function fileFormat(url:string){const p=url.split("?")[0].trim().toLowerCase();if(p.endsWith(".zip"))return"ZIP";if(p.endsWith(".xlsx"))return"XLSX";if(p.endsWith(".xls"))return"XLS";if(p.endsWith(".csv"))return"CSV";if(p.endsWith(".txt"))return"TXT";return""}
+function resourceUrl(value:string){return value.trim().replace(/(?:%20|%09|%0A|%0D)+$/gi,"")}
+function fileFormat(url:string){let p=resourceUrl(url).split("?")[0];try{p=decodeURIComponent(p)}catch{}p=p.trim().toLowerCase();if(p.endsWith(".zip"))return"ZIP";if(p.endsWith(".xlsx"))return"XLSX";if(p.endsWith(".xls"))return"XLS";if(p.endsWith(".csv"))return"CSV";if(p.endsWith(".txt"))return"TXT";return""}
 function officeFrom(value:string){
   const n=norm(value),matches:Array<{at:number;office:string}>=[];
   const specs:Array<[RegExp,string]>=[
@@ -46,13 +47,13 @@ function officeLabel(office:string){return({president:"Presidente/a de la Repúb
 function discoverResources(html:string,page:string){
   const out:Resource[]=[];const resultAt=Math.max(0,html.search(/>\s*(?:Resultados|Resultados Preliminares)[^<]*</i));const body=resultAt?html.slice(resultAt):html;
   for(const m of body.matchAll(/<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi)){
-    let url:string;try{url=new URL(htmlText(m[1]).trim(),page).toString().trim()}catch{continue}
+    let url:string;try{url=resourceUrl(new URL(htmlText(m[1]).trim(),page).toString())}catch{continue}
     const format=fileFormat(url);if(!format)continue;
     const before=htmlText(body.slice(Math.max(0,(m.index??0)-1200),m.index??0)),label=htmlText(m[2]),context=`${before} ${label}`;
     const office=officeFrom(context);if(!office)continue;
     if(/padron|participacion|candidatura|estadistica por|porcentaje de votantes/i.test(label))continue;
     const date=dateFrom(context),year=date?Number(date.slice(0,4)):yearFrom(context)||yearFrom(page),round=roundFrom(context);
-    out.push({url:url.replace(/%20$/,""),label:label||url,page,office,date,year,round,status:/preliminar/i.test(`${label} ${page}`)?"preliminary":"definitive"});
+    out.push({url,label:label||url,page,office,date,year,round,status:/preliminar/i.test(`${label} ${page}`)?"preliminary":"definitive"});
   }
   return out;
 }
