@@ -3,6 +3,7 @@ import { syncDatosGob } from "../ingest/connectors/datos-gob";
 import { syncDatosGobResources } from "../ingest/connectors/datos-resources";
 import { syncEnergiaAbierta } from "../ingest/connectors/energia-abierta";
 import { syncSinim } from "../ingest/connectors/sinim";
+import { syncRsh } from "../ingest/connectors/rsh";
 import { syncIne } from "../ingest/connectors/ine";
 import { syncBCentral } from "../ingest/connectors/bcentral";
 import { syncChileCompra } from "../ingest/connectors/chilecompra";
@@ -49,6 +50,7 @@ export async function syncAll(options:SyncAllOptions){
   await step("Datos.gob catálogo",()=>syncDatosGob());
   await step("Energía Abierta / CNE",()=>syncEnergiaAbierta());
   await step("SINIM / SUBDERE",()=>syncSinim());
+  await step("RSH / Calificación Socioeconómica",()=>syncRsh());
   await step("INE / SDMX",()=>syncIne());
 
   await step(
