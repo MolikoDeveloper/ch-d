@@ -1,4 +1,4 @@
-import { gzipSync, gunzipSync } from "node:zlib";
+import { gunzipSync } from "node:zlib";
 import { db } from "../db";
 
 function redactUrl(raw:string){
@@ -22,6 +22,10 @@ function decodeText(bytes:Uint8Array, contentType:string|null){
   catch { return new TextDecoder("utf-8").decode(bytes); }
 }
 
+/**
+ * Compatibility helper for databases created before RAW retention was disabled.
+ * New snapshots never persist response bodies, so this normally returns null.
+ */
 export function loadSnapshotBytes(snapshotId:number){
   const row=db.prepare(`SELECT content_blob,storage_encoding FROM raw_snapshots WHERE id=?`).get(snapshotId) as {content_blob:Uint8Array|null;storage_encoding:string|null}|null;
   if(!row?.content_blob) return null;
@@ -29,7 +33,12 @@ export function loadSnapshotBytes(snapshotId:number){
   return row.storage_encoding==="gzip"?new Uint8Array(gunzipSync(bytes)):bytes;
 }
 
+/**
+ * Fetches a source for immediate parsing and stores only provenance metadata.
+ * Response bytes live only for the duration of the current ingestion process.
+ */
 export async function fetchAndSnapshot(sourceId:string, runId:number, url:string, init?:RequestInit){
+  if(!url?.trim()) throw new Error("URL de fuente vacía");
   const response = await fetch(url, init);
   const bytes = new Uint8Array(await response.arrayBuffer());
   const hasher = new Bun.CryptoHasher("sha256");
@@ -38,17 +47,17 @@ export async function fetchAndSnapshot(sourceId:string, runId:number, url:string
   const date = new Date();
   const storedUrl = redactUrl(url);
   const contentType=response.headers.get("content-type");
-  const compressed=new Uint8Array(gzipSync(bytes,{level:6}));
 
   db.prepare(`INSERT OR IGNORE INTO raw_snapshots
     (source_id,ingest_run_id,fetched_at,source_url,content_type,sha256,byte_size,local_path,content_blob,storage_encoding,http_status)
     VALUES(?,?,?,?,?,?,?,?,?,?,?)`)
-    .run(sourceId,runId,date.toISOString(),storedUrl,contentType,sha256,bytes.byteLength,null,compressed,"gzip",response.status);
+    .run(sourceId,runId,date.toISOString(),storedUrl,contentType,sha256,bytes.byteLength,null,null,"discarded",response.status);
 
-  // Old snapshots may already exist by hash with only local_path populated.
-  db.prepare(`UPDATE raw_snapshots SET content_blob=?,storage_encoding='gzip',local_path=NULL
-    WHERE source_id=? AND sha256=? AND content_blob IS NULL`)
-    .run(compressed,sourceId,sha256);
+  // If the same payload existed from the old RAW-retention era, discard its body now.
+  db.prepare(`UPDATE raw_snapshots
+    SET content_blob=NULL,local_path=NULL,storage_encoding='discarded'
+    WHERE source_id=? AND sha256=? AND (content_blob IS NOT NULL OR local_path IS NOT NULL OR storage_encoding!='discarded')`)
+    .run(sourceId,sha256);
 
   const row = db.prepare(`SELECT id FROM raw_snapshots WHERE source_id=? AND sha256=?`).get(sourceId,sha256) as {id:number};
   if(!response.ok) throw new Error(`HTTP ${response.status} ${storedUrl}`);
