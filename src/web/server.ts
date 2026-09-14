@@ -1,6 +1,7 @@
 import { initDb, db } from "../db";
 import { SOURCES } from "../domain/sources";
 import { communeProfile, indicatorCatalog, indicatorMap, searchPublicData, territoriesPayload } from "./explorer";
+import { communeElectionResults, communePlaces } from "./civic";
 
 await initDb();
 const port=Number(process.env.PORT??3000);
@@ -54,7 +55,7 @@ function progressPayload(){
   const resourceCounts=Object.fromEntries(rows(`SELECT sync_status,count(*) n FROM source_resources GROUP BY sync_status`).map(r=>[r.sync_status,Number(r.n)]));
   const total=Object.values(resourceCounts).reduce((a:any,b:any)=>a+Number(b||0),0) as number;
   const done=Number(resourceCounts.parsed||0)+Number(resourceCounts.downloaded||0)+Number(resourceCounts.unsupported||0);
-  const ids=["bcentral","chilecompra","energia-abierta","sinim","ine"];
+  const ids=["bcentral","chilecompra","energia-abierta","sinim","rsh","casen","sii","servel","presupuesto-abierto","ine","presidencia"];
   return{
     generatedAt:new Date().toISOString(),
     connectorProgress:[{id:"datos-gob",name:"Datos.gob.cl",current:done,total,unit:"recursos",run:latest("datos-gob")},...ids.map(id=>{const run=latest(id);return{id,name:id,current:Number(run?.records_written??0),total:null,unit:"registros",run}})],
@@ -80,6 +81,8 @@ const server=Bun.serve({port,async fetch(req){
 
   if(url.pathname==="/api/explorer/territories")return json(cached("territories",300000,territoriesPayload));
   if(url.pathname==="/api/explorer/commune"){const code=url.searchParams.get("code")??"";const data=communeProfile(code);return data?json(data):json({error:"Comuna no encontrada"},404)}
+  if(url.pathname==="/api/explorer/elections"){const code=url.searchParams.get("code")??"";return json(communeElectionResults(code))}
+  if(url.pathname==="/api/explorer/places"){const code=url.searchParams.get("code")??"";return json(communePlaces(code))}
   if(url.pathname==="/api/explorer/metrics"){const source=url.searchParams.get("source")??"sinim";return json(cached(`metrics:${source}`,300000,()=>indicatorCatalog(source)))}
   if(url.pathname==="/api/explorer/map"){const source=url.searchParams.get("source")??"sinim",metric=url.searchParams.get("metric")??"";const data=indicatorMap(source,metric);return data?json(data):json({error:"Indicador no encontrado"},404)}
   if(url.pathname==="/api/explorer/search"){const q=url.searchParams.get("q")??"";return json(searchPublicData(q,Math.min(100,Number(url.searchParams.get("limit")??50))))}
