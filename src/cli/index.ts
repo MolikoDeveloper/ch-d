@@ -9,6 +9,7 @@ import { syncEnergiaAbierta } from "../ingest/connectors/energia-abierta";
 import { syncSinim } from "../ingest/connectors/sinim";
 import { syncIne } from "../ingest/connectors/ine";
 import { syncOfficialRegions } from "../geo";
+import { syncAll } from "./sync-all";
 
 await initDb();
 const [command,arg]=Bun.argv.slice(2);
@@ -22,7 +23,15 @@ else if(command==="stats"){
   console.table({sources:scalar("SELECT count(*) n FROM sources"),datasets:scalar("SELECT count(*) n FROM source_catalog_items"),resources:scalar("SELECT count(*) n FROM source_resources"),pending:scalar("SELECT count(*) n FROM source_resources WHERE sync_status='pending'"),parsed:scalar("SELECT count(*) n FROM source_resources WHERE sync_status='parsed'"),downloaded:scalar("SELECT count(*) n FROM source_resources WHERE sync_status='downloaded'"),unsupported:scalar("SELECT count(*) n FROM source_resources WHERE sync_status='unsupported'"),failed:scalar("SELECT count(*) n FROM source_resources WHERE sync_status='failed'"),sourceRecords:scalar("SELECT count(*) n FROM source_records"),transactions:scalar("SELECT count(*) n FROM transactions"),observations:scalar("SELECT count(*) n FROM observations"),metrics:scalar("SELECT count(*) n FROM metric_definitions"),geoAreas:scalar("SELECT count(*) n FROM geo_areas"),rawSnapshots:scalar("SELECT count(*) n FROM raw_snapshots")});
 }else if(command==="sync"){
   const target=arg;
-  if(!target) console.log("datos-gob:",await syncDatosGob());
+  if(!target||target==="all"){
+    await syncAll({
+      concurrency:Number(flag("concurrency")??process.env.INGEST_CONCURRENCY??4),
+      includeRaw:boolFlag("include-raw"),
+      force:boolFlag("force"),
+      from:flag("from"),
+      to:flag("to"),
+    });
+  }
   else if(target==="datos-gob") console.log(await syncDatosGob());
   else if(target==="datos-resources") console.log(await syncDatosGobResources({concurrency:Number(flag("concurrency")??process.env.INGEST_CONCURRENCY??4),limit:flag("limit")?Number(flag("limit")):undefined,includeRaw:boolFlag("include-raw"),retryFailed:boolFlag("retry-failed"),force:boolFlag("force")}));
   else if(target==="chilecompra"){const now=new Date().toISOString().slice(0,10);console.log(await syncChileCompra(flag("from")??now,flag("to")??flag("from")??now))}
@@ -33,4 +42,4 @@ else if(command==="stats"){
   else if(target==="geo") console.log(await syncOfficialRegions());
   else if(target==="datos-resource"){const id=flag("id");if(!id)throw new Error("Falta --id=<resource-id>");console.log(await syncDatosGobResource(id))}
   else throw new Error(`Fuente automática desconocida: ${target}`);
-}else console.log("Comandos: db:init | sources:list | stats | sync [datos-gob|datos-resources|datos-resource|chilecompra|bcentral|energia-abierta|sinim|ine|geo]");
+}else console.log("Comandos: db:init | sources:list | stats | sync [all|datos-gob|datos-resources|datos-resource|chilecompra|bcentral|energia-abierta|sinim|ine|geo]");
