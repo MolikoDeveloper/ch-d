@@ -54,6 +54,7 @@ export function initDb() {
     addColumn("source_resources","skip_reason","TEXT");
     addColumn("raw_snapshots","content_blob","BLOB");
     addColumn("raw_snapshots","storage_encoding","TEXT NOT NULL DEFAULT 'identity'");
+    addColumn("persons","birth_date","TEXT");
 
     const stmt = db.prepare(`
       INSERT INTO sources (id,name,institution,domain,base_url,auth_kind,automatic,metadata_json)
