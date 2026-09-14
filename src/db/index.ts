@@ -1,5 +1,4 @@
 import { Database } from "bun:sqlite";
-import { gunzipSync } from "node:zlib";
 import { SOURCES } from "../domain/sources";
 
 const path = process.env.DB_PATH ?? "./data/chile.sqlite";
@@ -103,27 +102,6 @@ function ensureExtendedSchema(){
   `);
 }
 
-function backfillSinimCentroids(){
-  const missing=(db.query(`SELECT id,code FROM geo_areas WHERE source_id='sinim' AND geo_type='commune' AND (centroid_lat IS NULL OR centroid_lon IS NULL)`).all() as Array<{id:number;code:string}>);
-  if(!missing.length||!columns("raw_snapshots").has("content_blob"))return 0;
-  const byCode=new Map(missing.map(x=>[String(x.code),x.id]));
-  const snapshots=db.query(`SELECT source_url,content_blob,storage_encoding FROM raw_snapshots WHERE source_id='sinim' AND content_blob IS NOT NULL AND source_url LIKE '%municipio=%' ORDER BY id DESC`).all() as Array<{source_url:string;content_blob:Uint8Array;storage_encoding:string|null}>;
-  const update=db.prepare(`UPDATE geo_areas SET centroid_lat=?,centroid_lon=? WHERE id=?`);
-  let updated=0;
-  for(const s of snapshots){
-    let code:string|null=null;try{code=new URL(s.source_url).searchParams.get("municipio")}catch{}
-    if(!code||!byCode.has(code))continue;
-    try{
-      const raw=Buffer.from(s.content_blob);const bytes=s.storage_encoding==="gzip"?gunzipSync(raw):raw;const html=new TextDecoder("utf-8").decode(bytes);
-      const m=html.match(/[?&](?:amp;)?ll=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/i);if(!m)continue;
-      const lat=Number(m[1]),lon=Number(m[2]);if(!Number.isFinite(lat)||!Number.isFinite(lon))continue;
-      update.run(lat,lon,byCode.get(code)!);byCode.delete(code);updated++;if(!byCode.size)break;
-    }catch{}
-  }
-  if(updated)console.log(`[db] SINIM: ${updated} centroides comunales recuperados desde snapshots`);
-  return updated;
-}
-
 export function initDb() {
   const sql = Bun.file(new URL("./schema.sql", import.meta.url));
   return sql.text().then(async (text) => {
@@ -138,8 +116,9 @@ export function initDb() {
     addColumn("source_resources","http_etag","TEXT");
     addColumn("source_resources","http_last_modified","TEXT");
     addColumn("source_resources","skip_reason","TEXT");
+    // Legacy columns remain for compatibility, but response bodies are no longer persisted.
     addColumn("raw_snapshots","content_blob","BLOB");
-    addColumn("raw_snapshots","storage_encoding","TEXT NOT NULL DEFAULT 'identity'");
+    addColumn("raw_snapshots","storage_encoding","TEXT NOT NULL DEFAULT 'discarded'");
     addColumn("persons","birth_date","TEXT");
 
     const stmt = db.prepare(`
@@ -160,7 +139,6 @@ export function initDb() {
     ensureExtendedSchema();
     const { seedGeography } = await import("../geo");
     seedGeography();
-    backfillSinimCentroids();
 
     db.exec(`
       INSERT INTO metric_definitions(source_id,external_id,title,description,category,subcategory,unit,frequency,geo_scope,metadata_json)
