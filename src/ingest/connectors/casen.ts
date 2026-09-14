@@ -45,6 +45,6 @@ export async function syncCasen(){
         resourcesDone++;console.log(`[casen] ✓ ${clean(resource.name)} · observaciones=${local}`)
       }catch(e){failed++;console.error(`[casen] ! ${resource.name}: ${String(e)}`)}updateRunProgress(run,seen,written,`${ri+1}/${resources.length} recursos; ok=${resourcesDone}; failed=${failed}`)
     }
-    finishRun(run,resourcesDone?"success":"failed",`resources=${resourcesDone}; failed=${failed}`,seen,written);if(!resourcesDone)throw new Error("No se pudo sincronizar ningún recurso CASEN comunal");return{packages:selected.length,resources:resourcesDone,seen,written,failed}
+    finishRun(run,written>0?"success":"failed",`resources=${resourcesDone}; observations=${written}; failed=${failed}`,seen,written);if(!written)throw new Error("CASEN descargó recursos pero no produjo observaciones comunales normalizadas");return{packages:selected.length,resources:resourcesDone,seen,written,failed}
   }catch(e){finishRun(run,"failed",String(e),seen,written);throw e}
 }
