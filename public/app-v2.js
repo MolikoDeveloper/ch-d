@@ -54,7 +54,7 @@ function renderMap(kind){
     const detail=meta.id==='geography'
       ? `${p.label} · código ${p.code||'—'}`
       : entry
-        ? `${p.label} — ${meta.label}: ${formatValue(entry.value,meta.unit)}${entry.date?` — ${dateOnly(entry.date)}`:''}${entry.count!=null?` — ${integer.format(entry.count)} registros`:''}`
+        ? `${p.label} — ${meta.label}: ${formatValue(entry.value,meta.unit)}${entry.date?` — ${dateOnly(entry.date)}`:''}${entry.count!=null?` — ${integer.format(entry.count)} ${meta.countLabel||'registros'}`:''}`
         : `${p.label} — sin dato para ${meta.label}`;
     layer.bindTooltip(document.createTextNode(p.label||'Región'),{sticky:true,direction:'top'});
     layer.bindPopup(document.createTextNode(`${detail} — Fuente: ${meta.source}`));
