@@ -20,13 +20,13 @@ type RunRow={status:string;finished_at:string|null;message:string|null};
 const FRESHNESS_HOURS:Record<string,number>={
   "datos-gob":24,
   sinim:24,
-  rsh:24,
-  casen:24*7,
-  ine:6,
-  sii:24*7,
+  rsh:24*7,
+  casen:24*30,
+  ine:24,
+  sii:24*30,
   servel:24,
   "presupuesto-abierto":6,
-  "energia-abierta":6,
+  "energia-abierta":24,
   bcentral:3,
   chilecompra:1,
 };
