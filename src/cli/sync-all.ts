@@ -48,7 +48,7 @@ function ttl(sourceId:string){
   return Number.isFinite(configured)&&configured>=0?configured:(FRESHNESS_HOURS[sourceId]??24);
 }
 function latestRun(sourceId:string,kind?:"datos-catalog"){
-  const clause=kind==="datos-catalog"?`AND (message IS NULL OR message='catalog')`:"";
+  const clause=kind==="datos-catalog"?`AND (message IS NULL OR message='catalog' OR message LIKE 'catalog:%')`:"";
   return db.query(`SELECT status,finished_at,message FROM ingest_runs WHERE source_id=? ${clause} ORDER BY id DESC LIMIT 1`).get(sourceId) as RunRow|null;
 }
 function freshnessSkip(sourceId:string,options:SyncAllOptions,kind?:"datos-catalog"){
@@ -61,9 +61,9 @@ function freshnessSkip(sourceId:string,options:SyncAllOptions,kind?:"datos-catal
 }
 function geographySkip(options:SyncAllOptions){
   if(options.force)return undefined;
-  const regions=Number((db.query(`SELECT COUNT(*) n FROM geo_areas WHERE geo_type='region' AND geometry_json IS NOT NULL`).get()as any)?.n??0);
+  const regions=Number((db.query(`SELECT COUNT(*) n FROM geo_areas WHERE geo_type='region'`).get()as any)?.n??0);
   const communes=Number((db.query(`SELECT COUNT(*) n FROM geo_areas WHERE geo_type='commune' AND geometry_json IS NOT NULL`).get()as any)?.n??0);
-  if(regions>=16&&communes>=330)return`geometría ya cargada · regiones=${regions} comunas=${communes}`;
+  if(regions>=16&&communes>=330)return`cobertura ya cargada · regiones=${regions} comunas_con_polígono=${communes}`;
   return undefined;
 }
 function datosResourcesSkip(options:SyncAllOptions){
