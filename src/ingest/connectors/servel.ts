@@ -2,6 +2,7 @@ import * as XLSX from "xlsx";
 import { db, finishRun, startRun, updateRunProgress } from "../../db";
 import { resolveGeoArea } from "../../geo";
 import { fetchAndSnapshot } from "../raw";
+import { syncServelResults } from "./servel-results";
 
 type MatrixRow=unknown[];
 type DataRow=Record<string,unknown>;
@@ -71,6 +72,12 @@ export async function syncServel(){
     const metric=db.prepare(`INSERT INTO metric_definitions(source_id,external_id,title,description,category,subcategory,unit,frequency,geo_scope,metadata_json) VALUES('servel',?,?,?,?,?,?,?,'commune',?) ON CONFLICT(source_id,external_id) DO UPDATE SET title=excluded.title,description=excluded.description,subcategory=excluded.subcategory,unit=excluded.unit,metadata_json=excluded.metadata_json`);
     const obs=db.prepare(`INSERT INTO observations(source_id,external_id,observed_at,metric,value_number,value_text,unit,geo_area_id,subject_type,subject_id,raw_snapshot_id,payload_json) VALUES('servel',?,?,?,?,NULL,?,?,?,?,?,?) ON CONFLICT(source_id,external_id,metric) DO UPDATE SET observed_at=excluded.observed_at,value_number=excluded.value_number,unit=excluded.unit,geo_area_id=excluded.geo_area_id,raw_snapshot_id=excluded.raw_snapshot_id,payload_json=excluded.payload_json`);
     db.transaction(()=>{for(const g of groups.values()){const value=g.total.length?Math.max(...g.total):g.leaf;if(!Number.isFinite(value)||value<=0)continue;const id=metricId(g.process);metric.run(id,`Electores habilitados — ${g.process}`,"Cantidad de electores habilitados para sufragar según padrón electoral definitivo de SERVEL.","elecciones","Padrón electoral","N°","event",JSON.stringify({process:g.process,year:g.year,sourceUrl:url,mapEligible:true}));obs.run(`${g.subject}:${id}:${g.year}`,String(g.year),id,value,"N°",g.geoId,"commune",g.subject,snap.snapshotId,JSON.stringify({process:g.process,year:g.year,sourceUrl:url,sourceRows:g.rows}));written++}})();
-    finishRun(run,written?"success":"failed",`groups=${groups.size}; unresolved=${unresolved}; observations=${written}`,seen,written);if(!written)throw new Error(`SERVEL no produjo observaciones del padrón; hojas=${wb.SheetNames.length} filas=${seen} sin_resolver=${unresolved}`);return{worksheets:wb.SheetNames.length,seen,written,unresolved,groups:groups.size};
+
+    let results:any={pages:0,resources:0,parsedResources:0,seen:0,written:0,unresolved:0,failed:0};
+    try{results=await syncServelResults(run)}catch(e){console.warn(`[servel:results] resultados no disponibles: ${String(e)}`)}
+    const totalSeen=seen+Number(results.seen||0),totalWritten=written+Number(results.written||0),totalUnresolved=unresolved+Number(results.unresolved||0);
+    finishRun(run,totalWritten?"success":"failed",`padron=${written}; resultados=${results.written||0}; resources=${results.parsedResources||0}/${results.resources||0}; unresolved=${totalUnresolved}; failed=${results.failed||0}`,totalSeen,totalWritten);
+    if(!totalWritten)throw new Error(`SERVEL no produjo datos normalizados; padrón=${written} resultados=${results.written||0}`);
+    return{worksheets:wb.SheetNames.length,padron:{seen,written,unresolved,groups:groups.size},results};
   }catch(e){finishRun(run,"failed",String(e),seen,written);throw e}
 }
