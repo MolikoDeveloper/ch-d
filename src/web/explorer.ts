@@ -12,6 +12,18 @@ const SOURCE_NAMES:Record<string,string>={
   chilecompra:"ChileCompra / Mercado Público",
 };
 
+function cleanMetricTitle(value:string){
+  return String(value??"")
+    .replace(/\s*\((?:[^)]*(?:indicador\s+disponible|datos?\s+desde|disponible\s+(?:a\s+partir|desde)|serie\s+disponible)[^)]*)\)\s*/gi," ")
+    .replace(/\s+/g," ")
+    .trim();
+}
+function comparableTitle(value:string){
+  const n=cleanMetricTitle(value).normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
+  if(!n)return false;
+  return !/^(?:codigo|rut|telefono|fax|correo|direccion|sitio web|alcalde|concejo|municipalidad\b)/.test(n)
+    && !/\b(?:latitud|longitud|codigo postal)\b/.test(n);
+}
 function sinimPeriodLabel(row:any){
   if(!row?.payload_json)return row?.observed_at??null;
   try{
@@ -37,7 +49,26 @@ export function territoriesPayload(){
 
 export function indicatorCatalog(sourceId:string){
   if(!["sinim","rsh","ine","energia-abierta","bcentral"].includes(sourceId))return[];
-  return rows(`SELECT external_id metric,title,subcategory,unit,frequency,geo_scope FROM metric_definitions WHERE source_id=? AND geo_scope IN ('region','commune') ORDER BY COALESCE(subcategory,''),title`,sourceId);
+  const catalog=rows(`
+    SELECT * FROM (
+      SELECT m.external_id metric,m.title,m.subcategory,m.unit,m.frequency,m.geo_scope,
+             (SELECT COUNT(DISTINCT o.geo_area_id)
+                FROM observations o
+               WHERE o.source_id=m.source_id AND o.metric=m.external_id
+                 AND o.geo_area_id IS NOT NULL AND o.value_number IS NOT NULL) territories,
+             (SELECT MAX(o.observed_at)
+                FROM observations o
+               WHERE o.source_id=m.source_id AND o.metric=m.external_id
+                 AND o.geo_area_id IS NOT NULL AND o.value_number IS NOT NULL) latest_period
+        FROM metric_definitions m
+       WHERE m.source_id=? AND m.geo_scope IN ('region','commune')
+    )
+    WHERE territories>=2
+    ORDER BY COALESCE(subcategory,''),title
+  `,sourceId);
+  return catalog
+    .map(x=>({...x,title:cleanMetricTitle(x.title)}))
+    .filter(x=>comparableTitle(x.title));
 }
 
 function latestIndicators(sourceId:string,geoAreaId:number,scope?:string){
@@ -52,7 +83,7 @@ function latestIndicators(sourceId:string,geoAreaId:number,scope?:string){
     )
     SELECT metric,title,subcategory,unit,frequency,geo_scope,observed_at,value_number,value_text FROM ranked WHERE rn=1
     ORDER BY COALESCE(subcategory,''),title
-  `,...params);
+  `,...params).map(x=>({...x,title:cleanMetricTitle(x.title)}));
 }
 
 function rshUnits(communeId:number){
@@ -99,7 +130,7 @@ export function communeProfile(code:string){
     )
     SELECT metric,title,subcategory,unit,frequency,observed_at,value_number,value_text,payload_json FROM ranked WHERE rn=1
     ORDER BY COALESCE(subcategory,''),title
-  `,commune.id).map(x=>({...x,observed_at:sinimPeriodLabel(x),payload_json:undefined}));
+  `,commune.id).map(x=>({...x,title:cleanMetricTitle(x.title),observed_at:sinimPeriodLabel(x),payload_json:undefined}));
   const authorities=rows(`
     SELECT r.relation_type role,p.canonical_name name,json_extract(r.metadata_json,'$.party') party
     FROM relationships r JOIN persons p ON p.source_id='sinim' AND p.external_id=r.to_id
@@ -115,6 +146,7 @@ export function communeProfile(code:string){
 export function indicatorMap(sourceId:string,metricId:string){
   if(!["sinim","rsh","ine","energia-abierta","bcentral"].includes(sourceId))return null;
   const metric=one(`SELECT external_id metric,title,subcategory,unit,frequency,geo_scope FROM metric_definitions WHERE source_id=? AND external_id=?`,sourceId,metricId);if(!metric)return null;
+  metric.title=cleanMetricTitle(metric.title);
   let values=rows(`
     WITH ranked AS (
       SELECT o.geo_area_id,o.observed_at,o.value_number,o.value_text,o.payload_json,ROW_NUMBER() OVER(PARTITION BY o.geo_area_id ORDER BY o.observed_at DESC,o.id DESC) rn
@@ -132,6 +164,6 @@ export function indicatorMap(sourceId:string,metricId:string){
 export function searchPublicData(q:string,limit=50){
   const term=`%${q.trim()}%`;if(!q.trim())return{communes:[],metrics:[]};
   const communes=rows(`SELECT c.code,c.name,r.name region_name,c.centroid_lat,c.centroid_lon FROM geo_areas c LEFT JOIN geo_areas r ON r.id=c.parent_id WHERE c.geo_type='commune' AND c.name LIKE ? ORDER BY c.name LIMIT ?`,term,limit);
-  const metrics=rows(`SELECT source_id,external_id metric,title,subcategory,unit,geo_scope FROM metric_definitions WHERE title LIKE ? ORDER BY title LIMIT ?`,term,limit);
+  const metrics=rows(`SELECT source_id,external_id metric,title,subcategory,unit,geo_scope FROM metric_definitions WHERE title LIKE ? ORDER BY title LIMIT ?`,term,limit).map(x=>({...x,title:cleanMetricTitle(x.title)}));
   return{communes,metrics};
 }
