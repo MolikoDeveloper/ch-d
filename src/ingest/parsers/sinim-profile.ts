@@ -1,10 +1,17 @@
 export type SinimObservation={section:string;title:string;unit:string|null;valueNumber:number|null;valueText:string|null};
 export type SinimAuthority={role:"mayor"|"councillor";name:string;party:string|null};
+export type SinimCoordinates={lat:number;lon:number};
 
 function decodeHtml(s:string){return s.replace(/&nbsp;/gi," ").replace(/&amp;/gi,"&").replace(/&quot;/gi,'"').replace(/&#39;|&apos;/gi,"'").replace(/&deg;/gi,"°").replace(/&sup2;/gi,"²").replace(/&#(\d+);/g,(_,n)=>String.fromCharCode(Number(n)))}
 export function htmlText(html:string){return decodeHtml(html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,"").replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi,"").replace(/<[^>]+>/g," ").replace(/\s+/g," ").trim())}
 function numeric(v:string){const s=v.trim().replace(/\s/g,"").replace(/\.(?=\d{3}(?:\D|$))/g,"").replace(",",".").replace(/%$/,"");if(!s||/^(?:n\/?a|s\/?d|sin dato|sin dato oficial|no aplica|no recepcionado|descontinuado|-+)$/i.test(s))return null;const n=Number(s);return Number.isFinite(n)?n:null}
 function sectionAt(headings:Array<{at:number,name:string}>,at:number){let section="Ficha comunal";for(const h of headings){if(h.at>at)break;if(h.name)section=h.name}return section}
+function coordinatesFrom(html:string):SinimCoordinates|null{
+  const m=html.match(/[?&](?:amp;)?ll=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/i);
+  if(!m)return null;
+  const lat=Number(m[1]),lon=Number(m[2]);
+  return Number.isFinite(lat)&&Number.isFinite(lon)?{lat,lon}:null;
+}
 
 export function parseSinimProfile(html:string){
   const year=Number(html.match(/año\s+(20\d{2})/i)?.[1]??new Date().getFullYear());
@@ -37,5 +44,5 @@ export function parseSinimProfile(html:string){
   for(const row of html.matchAll(/<div\s+class=["']col_nom["'][^>]*>([\s\S]*?)<\/div>\s*<div\s+class=["']col_partido["'][^>]*>([\s\S]*?)<\/div>/gi)){
     const name=htmlText(row[1]),party=htmlText(row[2]);if(name&&!/concejo municipal/i.test(name))authorities.push({role:"councillor",name,party:party||null});
   }
-  return{year,observations,authorities};
+  return{year,observations,authorities,coordinates:coordinatesFrom(html)};
 }
