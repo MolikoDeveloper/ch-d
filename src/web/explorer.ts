@@ -30,7 +30,7 @@ export function territoriesPayload(){
     FROM geo_areas c
     LEFT JOIN geo_areas r ON r.id=c.parent_id
     LEFT JOIN counts x ON x.geo_area_id=c.id
-    WHERE c.source_id='sinim' AND c.geo_type='commune'
+    WHERE c.geo_type='commune'
     ORDER BY r.name,c.name
   `);
   return {regions,communes};
@@ -51,7 +51,8 @@ export function communeProfile(code:string){
     SELECT c.id,c.code,c.name,c.centroid_lat,c.centroid_lon,
            r.id region_id,r.code region_code,r.name region_name
     FROM geo_areas c LEFT JOIN geo_areas r ON r.id=c.parent_id
-    WHERE c.source_id='sinim' AND c.geo_type='commune' AND c.code=?
+    WHERE c.geo_type='commune' AND c.code=?
+    ORDER BY CASE c.source_id WHEN 'ide-chile' THEN 0 ELSE 1 END,c.id
     LIMIT 1
   `,code);
   if(!commune)return null;
@@ -97,7 +98,7 @@ export function indicatorMap(sourceId:string,metricId:string){
       FROM observations o
       WHERE o.source_id=? AND o.metric=? AND o.geo_area_id IS NOT NULL
     )
-    SELECT g.id geo_id,g.geo_type,g.code,g.name,g.parent_id,g.centroid_lat,g.centroid_lon,
+    SELECT g.id geo_id,g.geo_type,g.code,g.name,g.parent_id,g.centroid_lat,g.centroid_lon,g.geometry_json,
            p.code region_code,p.name region_name,
            r.observed_at,r.value_number,r.value_text
     FROM ranked r
@@ -124,7 +125,7 @@ export function searchPublicData(q:string,limit=50){
   const communes=rows(`
     SELECT c.code,c.name,r.name region_name,c.centroid_lat,c.centroid_lon
     FROM geo_areas c LEFT JOIN geo_areas r ON r.id=c.parent_id
-    WHERE c.source_id='sinim' AND c.geo_type='commune' AND c.name LIKE ?
+    WHERE c.geo_type='commune' AND c.name LIKE ?
     ORDER BY c.name LIMIT ?
   `,term,limit);
   const metrics=rows(`
