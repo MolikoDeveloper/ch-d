@@ -8,8 +8,12 @@ type RawRow={id:number;bytes:number;local_path:string|null};
 const dbPath=process.env.DB_PATH??"./data/chile.sqlite";
 function human(bytes:number){if(!Number.isFinite(bytes)||bytes<=0)return"0 B";const units=["B","KiB","MiB","GiB","TiB"];let n=bytes,i=0;while(n>=1024&&i<units.length-1){n/=1024;i++}return`${n.toFixed(i?1:0)} ${units[i]}`}
 function scalar(q:string,...p:any[]){return Number((db.query(q).get(...p)as any)?.n??0)}
+function pragmaNumber(name:"page_size"|"page_count"|"freelist_count"){
+  const row=db.query(`PRAGMA ${name}`).get() as Record<string,unknown>|null;
+  return Number(row?Object.values(row)[0]:0)||0;
+}
 function fileSize(){try{return statSync(dbPath).size}catch{return 0}}
-function pageStats(){const pageSize=scalar("PRAGMA page_size"),pages=scalar("PRAGMA page_count"),free=scalar("PRAGMA freelist_count");return{pageSize,pages,free,logicalBytes:pages*pageSize,reclaimableBytes:free*pageSize}}
+function pageStats(){const pageSize=pragmaNumber("page_size"),pages=pragmaNumber("page_count"),free=pragmaNumber("freelist_count");return{pageSize,pages,free,logicalBytes:pages*pageSize,reclaimableBytes:free*pageSize}}
 function rawStats(){return{
   snapshots:scalar("SELECT COUNT(*) n FROM raw_snapshots"),
   bodies:scalar("SELECT COUNT(*) n FROM raw_snapshots WHERE content_blob IS NOT NULL"),
