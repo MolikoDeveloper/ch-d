@@ -19,4 +19,38 @@ function seedCommunes(html:string){
 }
 function saveAuthorities(code:string,list:ReturnType<typeof parseSinimProfile>["authorities"],snapshotId:number){db.prepare(`DELETE FROM relationships WHERE source_id='sinim' AND from_type='commune' AND from_id=? AND relation_type IN ('mayor','councillor')`).run(code);const person=db.prepare(`INSERT INTO persons(canonical_name,source_id,external_id,metadata_json) VALUES(?,'sinim',?,?) ON CONFLICT(source_id,external_id) DO UPDATE SET canonical_name=excluded.canonical_name,metadata_json=excluded.metadata_json`),rel=db.prepare(`INSERT INTO relationships(source_id,from_type,from_id,relation_type,to_type,to_id,asserted_by,metadata_json) VALUES('sinim','commune',?,?,'person',?,'source',?)`);for(let i=0;i<list.length;i++){const a=list[i],external=`${code}:${a.role}:${i}:${normalizeGeoName(a.name)}`;person.run(a.name,external,JSON.stringify({role:a.role,party:a.party,rawSnapshotId:snapshotId}));rel.run(code,a.role,external,JSON.stringify({party:a.party,rawSnapshotId:snapshotId}))}}
 
-export async function syncSinim(){const run=startRun("sinim");let seen=0,written=0,failed=0,authorities=0;try{console.log("[sinim] Descargando catálogo comunal oficial...");const index=await fetchAndSnapshot("sinim",run,INDEX_URL),communes=seedCommunes(index.text);console.log(`[sinim] ${communes.length} comunas registradas/resueltas`);const limit=Math.min(communes.length,Math.max(1,Number(process.env.SINIM_COMMUNE_LIMIT??communes.length)||communes.length)),selected=communes.slice(0,limit);const metric=db.prepare(`INSERT INTO metric_definitions(source_id,external_id,title,description,category,subcategory,unit,frequency,geo_scope,metadata_json) VALUES('sinim',?,?,?,?,?,?,?,'commune',?) ON CONFLICT(source_id,external_id) DO UPDATE SET title=excluded.title,subcategory=excluded.subcategory,unit=excluded.unit,metadata_json=excluded.metadata_json`),obs=db.prepare(`INSERT INTO observations(source_id,external_id,observed_at,metric,value_number,value_text,unit,geo_area_id,subject_type,subject_id,raw_snapshot_id,payload_json) VALUES('sinim',?,?,?,?,?,?,?,?,?,?,NULL) ON CONFLICT(source_id,external_id,metric) DO UPDATE SET observed_at=excluded.observed_at,value_number=excluded.value_number,value_text=excluded.value_text,unit=excluded.unit,geo_area_id=excluded.geo_area_id,raw_snapshot_id=excluded.raw_snapshot_id`),setCoords=db.prepare(`UPDATE geo_areas SET centroid_lat=?,centroid_lon=? WHERE id=?`);for(let i=0;i<selected.length;i++){const{code,name}=selected[i],url=`${INDEX_URL}?municipio=${code}`;try{const snap=await fetchAndSnapshot("sinim",run,url),parsed=parseSinimProfile(snap.text);seen+=parsed.observations.length;const geo=resolveGeoArea(code,null);if(!geo)throw new Error(`comuna ${code} no resuelta`);let local=0;db.transaction(()=>{if(parsed.coordinates)setCoords.run(parsed.coordinates.lat,parsed.coordinates.lon,geo);for(const o of parsed.observations){const id=metricId(o.section,o.title);metric.run(id,o.title,`Ficha comunal SINIM: ${o.section}`,"municipal",o.section,o.unit,"annual",JSON.stringify({source:"SINIM",section:o.section,profile:url,year:parsed.year}));obs.run(`${code}:${id}:${parsed.year}`,`${parsed.year}-12-31`,id,o.valueNumber,o.valueText,o.unit,geo,"commune",code,snap.snapshotId);written++;local++}saveAuthorities(code,parsed.authorities,snap.snapshotId);authorities+=parsed.authorities.length})();console.log(`[sinim] ${i+1}/${selected.length} ✓ ${name} · obs=${local} autoridades=${parsed.authorities.length}${parsed.coordinates?' geo=ok':''}`)}catch(e){failed++;console.error(`[sinim] ${i+1}/${selected.length} ! ${name}: ${String(e)}`)}db.prepare(`UPDATE ingest_runs SET records_seen=?,records_written=?,message=? WHERE id=?`).run(seen,written,`${i+1}/${selected.length} comunas; autoridades=${authorities}; failed=${failed}`,run)}finishRun(run,"success",`comunas=${selected.length}; autoridades=${authorities}; failed=${failed}`,seen,written);return{communes:selected.length,seen,written,authorities,failed}}catch(e){finishRun(run,"failed",String(e),seen,written);throw e}}
+export async function syncSinim(){
+  const run=startRun("sinim");let seen=0,written=0,failed=0,authorities=0;
+  try{
+    console.log("[sinim] Descargando catálogo comunal oficial...");
+    const index=await fetchAndSnapshot("sinim",run,INDEX_URL),communes=seedCommunes(index.text);
+    console.log(`[sinim] ${communes.length} comunas registradas/resueltas`);
+    const limit=Math.min(communes.length,Math.max(1,Number(process.env.SINIM_COMMUNE_LIMIT??communes.length)||communes.length)),selected=communes.slice(0,limit);
+    const metric=db.prepare(`INSERT INTO metric_definitions(source_id,external_id,title,description,category,subcategory,unit,frequency,geo_scope,metadata_json) VALUES('sinim',?,?,?,?,?,?,?,'commune',?) ON CONFLICT(source_id,external_id) DO UPDATE SET title=excluded.title,subcategory=excluded.subcategory,unit=excluded.unit,metadata_json=excluded.metadata_json`);
+    const obs=db.prepare(`INSERT INTO observations(source_id,external_id,observed_at,metric,value_number,value_text,unit,geo_area_id,subject_type,subject_id,raw_snapshot_id,payload_json) VALUES('sinim',?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(source_id,external_id,metric) DO UPDATE SET observed_at=excluded.observed_at,value_number=excluded.value_number,value_text=excluded.value_text,unit=excluded.unit,geo_area_id=excluded.geo_area_id,subject_type=excluded.subject_type,subject_id=excluded.subject_id,raw_snapshot_id=excluded.raw_snapshot_id,payload_json=excluded.payload_json`);
+    const setCoords=db.prepare(`UPDATE geo_areas SET centroid_lat=?,centroid_lon=? WHERE id=?`);
+    const removeLegacy=db.prepare(`DELETE FROM observations WHERE source_id='sinim' AND geo_area_id=? AND subject_type='commune'`);
+    for(let i=0;i<selected.length;i++){
+      const{code,name}=selected[i],url=`${INDEX_URL}?municipio=${code}`;
+      try{
+        const snap=await fetchAndSnapshot("sinim",run,url),parsed=parseSinimProfile(snap.text);seen+=parsed.observations.length;
+        const geo=resolveGeoArea(code,null);if(!geo)throw new Error(`comuna ${code} no resuelta`);let local=0;
+        db.transaction(()=>{
+          if(parsed.coordinates)setCoords.run(parsed.coordinates.lat,parsed.coordinates.lon,geo);
+          removeLegacy.run(geo);
+          for(const o of parsed.observations){
+            const id=metricId(o.section,o.title),periodYear=o.periodYear??parsed.profileYear;
+            metric.run(id,o.title,`Ficha comunal SINIM: ${o.section}`,"municipal",o.section,o.unit,"annual",JSON.stringify({source:"SINIM",section:o.section,profile:url}));
+            const payload=JSON.stringify({profileYear:parsed.profileYear,periodYear:o.periodYear,periodBasis:o.periodBasis,section:o.section,sourceUrl:url});
+            obs.run(`${code}:${id}:${periodYear}`,String(periodYear),id,o.valueNumber,o.valueText,o.unit,geo,"sinim_profile",code,snap.snapshotId,payload);written++;local++;
+          }
+          saveAuthorities(code,parsed.authorities,snap.snapshotId);authorities+=parsed.authorities.length;
+        })();
+        console.log(`[sinim] ${i+1}/${selected.length} ✓ ${name} · ficha=${parsed.profileYear} obs=${local} autoridades=${parsed.authorities.length}${parsed.coordinates?' geo=ok':''}`);
+      }catch(e){failed++;console.error(`[sinim] ${i+1}/${selected.length} ! ${name}: ${String(e)}`)}
+      db.prepare(`UPDATE ingest_runs SET records_seen=?,records_written=?,message=? WHERE id=?`).run(seen,written,`${i+1}/${selected.length} comunas; autoridades=${authorities}; failed=${failed}`,run)
+    }
+    finishRun(run,"success",`comunas=${selected.length}; autoridades=${authorities}; failed=${failed}`,seen,written);
+    return{communes:selected.length,seen,written,authorities,failed};
+  }catch(e){finishRun(run,"failed",String(e),seen,written);throw e}
+}
