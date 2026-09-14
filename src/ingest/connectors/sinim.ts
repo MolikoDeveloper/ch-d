@@ -6,7 +6,8 @@ import { fetchAndSnapshot } from "../raw";
 const BASE="https://datos.sinim.gov.cl";
 const INDEX_URL=`${BASE}/ficha_comunal.php`;
 
-function metricId(section:string,title:string){const h=new Bun.CryptoHasher("sha256");h.update(`${section}:${title}`);return`sinim:${h.digest("hex").slice(0,24)}`}
+function sectionKey(section:string){return section.replace(/\b20\d{2}\b/g,"").replace(/\(\s*Fuente[^)]*\)/gi,"").replace(/\s+/g," ").replace(/\s+\)/g,")").trim()}
+function metricId(section:string,title:string){const h=new Bun.CryptoHasher("sha256");h.update(`${sectionKey(section)}:${title}`);return`sinim:${h.digest("hex").slice(0,24)}`}
 function seedCommunes(html:string){
   const matches=[...html.matchAll(/>([^<>]{2,90}?)\s*-\s*(\d{5})</g)],unique=new Map<string,string>();
   for(const m of matches){const name=htmlText(m[1]);if(name&&!/seleccione/i.test(name))unique.set(m[2],name)}
@@ -26,7 +27,7 @@ export async function syncSinim(){
     const index=await fetchAndSnapshot("sinim",run,INDEX_URL),communes=seedCommunes(index.text);
     console.log(`[sinim] ${communes.length} comunas registradas/resueltas`);
     const limit=Math.min(communes.length,Math.max(1,Number(process.env.SINIM_COMMUNE_LIMIT??communes.length)||communes.length)),selected=communes.slice(0,limit);
-    const metric=db.prepare(`INSERT INTO metric_definitions(source_id,external_id,title,description,category,subcategory,unit,frequency,geo_scope,metadata_json) VALUES('sinim',?,?,?,?,?,?,?,'commune',?) ON CONFLICT(source_id,external_id) DO UPDATE SET title=excluded.title,subcategory=excluded.subcategory,unit=excluded.unit,metadata_json=excluded.metadata_json`);
+    const metric=db.prepare(`INSERT INTO metric_definitions(source_id,external_id,title,description,category,subcategory,unit,frequency,geo_scope,metadata_json) VALUES('sinim',?,?,?,?,?,?,?,'commune',?) ON CONFLICT(source_id,external_id) DO UPDATE SET title=excluded.title,description=excluded.description,subcategory=excluded.subcategory,unit=excluded.unit,metadata_json=excluded.metadata_json`);
     const obs=db.prepare(`INSERT INTO observations(source_id,external_id,observed_at,metric,value_number,value_text,unit,geo_area_id,subject_type,subject_id,raw_snapshot_id,payload_json) VALUES('sinim',?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(source_id,external_id,metric) DO UPDATE SET observed_at=excluded.observed_at,value_number=excluded.value_number,value_text=excluded.value_text,unit=excluded.unit,geo_area_id=excluded.geo_area_id,subject_type=excluded.subject_type,subject_id=excluded.subject_id,raw_snapshot_id=excluded.raw_snapshot_id,payload_json=excluded.payload_json`);
     const setCoords=db.prepare(`UPDATE geo_areas SET centroid_lat=?,centroid_lon=? WHERE id=?`);
     const removeLegacy=db.prepare(`DELETE FROM observations WHERE source_id='sinim' AND geo_area_id=? AND subject_type='commune'`);
@@ -39,8 +40,8 @@ export async function syncSinim(){
           if(parsed.coordinates)setCoords.run(parsed.coordinates.lat,parsed.coordinates.lon,geo);
           removeLegacy.run(geo);
           for(const o of parsed.observations){
-            const id=metricId(o.section,o.title),periodYear=o.periodYear??parsed.profileYear;
-            metric.run(id,o.title,`Ficha comunal SINIM: ${o.section}`,"municipal",o.section,o.unit,"annual",JSON.stringify({source:"SINIM",section:o.section,profile:url}));
+            const id=metricId(o.section,o.title),periodYear=o.periodYear??parsed.profileYear,subcategory=sectionKey(o.section);
+            metric.run(id,o.title,`Ficha comunal SINIM: ${o.section}`,"municipal",subcategory,o.unit,"annual",JSON.stringify({source:"SINIM",section:subcategory,profile:url}));
             const payload=JSON.stringify({profileYear:parsed.profileYear,periodYear:o.periodYear,periodBasis:o.periodBasis,section:o.section,sourceUrl:url});
             obs.run(`${code}:${id}:${periodYear}`,String(periodYear),id,o.valueNumber,o.valueText,o.unit,geo,"sinim_profile",code,snap.snapshotId,payload);written++;local++;
           }
@@ -50,6 +51,7 @@ export async function syncSinim(){
       }catch(e){failed++;console.error(`[sinim] ${i+1}/${selected.length} ! ${name}: ${String(e)}`)}
       db.prepare(`UPDATE ingest_runs SET records_seen=?,records_written=?,message=? WHERE id=?`).run(seen,written,`${i+1}/${selected.length} comunas; autoridades=${authorities}; failed=${failed}`,run)
     }
+    db.exec(`DELETE FROM metric_definitions WHERE source_id='sinim' AND NOT EXISTS (SELECT 1 FROM observations o WHERE o.source_id='sinim' AND o.metric=metric_definitions.external_id LIMIT 1)`);
     finishRun(run,"success",`comunas=${selected.length}; autoridades=${authorities}; failed=${failed}`,seen,written);
     return{communes:selected.length,seen,written,authorities,failed};
   }catch(e){finishRun(run,"failed",String(e),seen,written);throw e}
