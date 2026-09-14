@@ -13,6 +13,7 @@ import { syncSii } from "../ingest/connectors/sii";
 import { syncServel } from "../ingest/connectors/servel";
 import { syncPresupuestoAbierto } from "../ingest/connectors/presupuesto-abierto";
 import { syncPresidencia } from "../ingest/connectors/presidencia";
+import { syncApproval } from "../ingest/connectors/approval";
 import { syncIne } from "../ingest/connectors/ine";
 import { syncOfficialRegions } from "../geo";
 import { syncAll } from "./sync-all";
@@ -44,8 +45,9 @@ else if(command==="stats"){
   else if(target==="servel") console.log(await syncServel());
   else if(target==="presupuesto-abierto") console.log(await syncPresupuestoAbierto());
   else if(target==="presidencia") console.log(await syncPresidencia());
+  else if(target==="approval") console.log(await syncApproval());
   else if(target==="ine") console.log(await syncIne());
   else if(target==="geo") console.log(await syncOfficialRegions());
   else if(target==="datos-resource"){const id=flag("id");if(!id)throw new Error("Falta --id=<resource-id>");console.log(await syncDatosGobResource(id))}
   else throw new Error(`Fuente automática desconocida: ${target}`);
-}else console.log("Comandos: db:init | sources:list | stats | sync [all|datos-gob|datos-resources|datos-resource|chilecompra|bcentral|energia-abierta|sinim|rsh|casen|sii|servel|presupuesto-abierto|presidencia|ine|geo]");
+}else console.log("Comandos: db:init | sources:list | stats | sync [all|datos-gob|datos-resources|datos-resource|chilecompra|bcentral|energia-abierta|sinim|rsh|casen|sii|servel|presupuesto-abierto|presidencia|approval|ine|geo]");
