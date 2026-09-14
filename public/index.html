@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="/styles.css"/>
 <link rel="stylesheet" href="/panorama.css"/>
 <link rel="stylesheet" href="/authority.css"/>
+<link rel="stylesheet" href="/social.css"/>
 </head>
 <body>
 <header>
@@ -28,7 +29,7 @@
       <h1>Explorador de datos públicos de Chile</h1>
       <p class="muted">Navega por región, comuna e indicador. Cada valor conserva fuente, período y territorio.</p>
     </div>
-    <div class="source-badge"><span class="sync-dot"></span><div><b id="coverageLabel">Cargando territorios…</b><small>SINIM · INE · BCCh · CNE · ChileCompra</small></div></div>
+    <div class="source-badge"><span class="sync-dot"></span><div><b id="coverageLabel">Cargando territorios…</b><small>SINIM · RSH · INE · BCCh · CNE · ChileCompra</small></div></div>
   </div>
 
   <section id="economia" class="economy-strip-section">
@@ -58,6 +59,7 @@
       <label>Fuente para el mapa
         <select id="indicatorSource">
           <option value="sinim">SINIM / SUBDERE</option>
+          <option value="rsh">RSH / Calificación socioeconómica</option>
           <option value="ine">INE</option>
           <option value="energia-abierta">CNE / Energía</option>
         </select>
@@ -83,7 +85,7 @@
       <section id="communeDetail" class="commune-detail">
         <div class="detail-placeholder">
           <h3>Selecciona una comuna</h3>
-          <p>Verás todos los indicadores municipales disponibles, autoridades y períodos publicados por SINIM.</p>
+          <p>Verás indicadores municipales, autoridades, situación socioeconómica y períodos publicados por fuentes oficiales.</p>
         </div>
       </section>
     </div>
@@ -117,5 +119,6 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script type="module" src="/app-v2.js"></script>
 <script type="module" src="/authority-ui.js"></script>
+<script type="module" src="/social-ui.js"></script>
 </body>
 </html>
