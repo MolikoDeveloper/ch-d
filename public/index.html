@@ -10,83 +10,111 @@
 </head>
 <body>
 <header>
-  <div class="brand"><span class="mark">CL</span><div><b>Chile Transparente</b><small>Hechos públicos, fuentes verificables</small></div></div>
-  <nav><button class="active">Panorama</button><button>Gastos</button><button>Economía</button><button>Partidos</button><button>Proyectos de ley</button><button>Elecciones</button><button>Sociedad</button></nav>
-  <input id="search" placeholder="Buscar institución, proyecto, comuna…"/>
+  <div class="brand"><span class="mark">CL</span><div><b>Chile Transparente</b><small>Datos públicos, fuentes verificables</small></div></div>
+  <nav>
+    <a class="nav-link active" href="/">Explorador</a>
+    <a class="nav-link" href="#economia">Economía</a>
+    <a class="nav-link" href="#compras">Compras públicas</a>
+    <a class="nav-link" href="#territorio">Territorio</a>
+    <a class="nav-link" href="/status.html">Estado de datos</a>
+  </nav>
 </header>
-<main>
-<section class="panel dashboard-panel">
-  <div class="hero-row">
+
+<main class="explorer-layout">
+<section class="panel explorer-panel">
+  <div class="hero-row explorer-hero">
     <div>
-      <h1>Panorama de Chile</h1>
-      <p class="muted">Indicadores y hechos públicos provenientes de fuentes oficiales. Cada valor conserva su fuente, período y territorio.</p>
+      <h1>Explorador de datos públicos de Chile</h1>
+      <p class="muted">Navega por región, comuna e indicador. Cada valor conserva fuente, período y territorio.</p>
     </div>
-    <div class="source-badge"><span class="sync-dot"></span><div><b>Datos verificables</b><small>BCCh · ChileCompra · SINIM · INE · CNE</small></div></div>
+    <div class="source-badge"><span class="sync-dot"></span><div><b id="coverageLabel">Cargando territorios…</b><small>SINIM · INE · BCCh · CNE · ChileCompra</small></div></div>
   </div>
 
-  <div id="headlineCards" class="cards headline-cards">
-    <article><div><small>Cargando indicadores…</small><strong>—</strong></div></article>
-  </div>
+  <section id="economia" class="economy-strip-section">
+    <div class="section-title"><div><h2>Indicadores nacionales</h2><small>Banco Central de Chile</small></div></div>
+    <div id="economyStrip" class="fact-strip"><div class="empty-state">Cargando indicadores…</div></div>
+  </section>
 
-  <div class="dashboard-grid public-top-grid">
-    <section class="dash-card wide-card">
-      <div class="dash-head"><div><h2>Economía</h2><small>Indicadores nacionales recientes</small></div><span class="source-label">Banco Central de Chile</span></div>
-      <div id="economicSeries" class="series-list"><div class="empty-state">Cargando indicadores…</div></div>
-    </section>
+  <section id="territorio" class="territory-explorer">
+    <div class="section-title">
+      <div><h2>Territorio</h2><small>Selecciona una región o comuna para ver todos sus datos disponibles.</small></div>
+      <span id="territoryCount" class="source-label">—</span>
+    </div>
 
-    <section class="dash-card">
-      <div class="dash-head"><div><h2>Compras públicas</h2><small>Órdenes y montos registrados</small></div><span class="source-label">ChileCompra</span></div>
-      <div class="fact-kpis">
-        <div><b id="ccAmount">—</b><span>Monto registrado</span></div>
-        <div><b id="ccOrders">—</b><span>Órdenes</span></div>
-        <div><b id="ccBuyers">—</b><span>Compradores</span></div>
-        <div><b id="ccSuppliers">—</b><span>Proveedores</span></div>
-      </div>
-      <div id="ccRegions" class="bar-list compact-bars"><div class="empty-state">Sin compras georreferenciadas todavía.</div></div>
-    </section>
-  </div>
+    <div class="territory-controls">
+      <label>Buscar comuna
+        <input id="territorySearch" type="search" placeholder="Ej. Natales, Valdivia, Maipú…" autocomplete="off"/>
+      </label>
+      <label>Región
+        <select id="regionSelect"><option value="">Todas las regiones</option></select>
+      </label>
+      <label>Comuna
+        <select id="communeSelect"><option value="">Selecciona una comuna</option></select>
+      </label>
+    </div>
 
-  <div class="dashboard-grid public-domain-grid">
-    <section class="dash-card">
-      <div class="dash-head"><div><h2>Municipios</h2><small>Información comunal y autoridades locales</small></div><span class="source-label">SINIM / SUBDERE</span></div>
-      <div class="fact-kpis three-kpis">
-        <div><b id="sinimCommunes">—</b><span>Comunas</span></div>
-        <div><b id="sinimMayors">—</b><span>Alcaldes/as</span></div>
-        <div><b id="sinimCouncillors">—</b><span>Concejales/as</span></div>
-      </div>
-      <div id="sinimIndicators" class="series-list"><div class="empty-state">Sin indicadores municipales disponibles.</div></div>
-    </section>
+    <div class="data-controls">
+      <label>Fuente para el mapa
+        <select id="indicatorSource">
+          <option value="sinim">SINIM / SUBDERE</option>
+          <option value="ine">INE</option>
+          <option value="energia-abierta">CNE / Energía</option>
+          <option value="bcentral">Banco Central</option>
+        </select>
+      </label>
+      <label class="metric-control">Indicador
+        <select id="indicatorSelect"><option value="">Selecciona un indicador</option></select>
+      </label>
+      <label>Vista del mapa
+        <select id="mapMode">
+          <option value="geography">Territorios</option>
+          <option value="purchases">Compras públicas</option>
+          <option value="indicator">Indicador seleccionado</option>
+        </select>
+      </label>
+    </div>
 
-    <section class="dash-card">
-      <div class="dash-head"><div><h2>Trabajo</h2><small>Empleo, desocupación y fuerza de trabajo</small></div><span class="source-label">INE</span></div>
-      <div id="laborIndicators" class="series-list"><div class="empty-state">Sin indicadores laborales disponibles.</div></div>
-    </section>
+    <div class="territory-workspace">
+      <aside class="commune-browser">
+        <div class="browser-head"><b>Comunas</b><span id="communeResultCount">—</span></div>
+        <div id="communeList" class="commune-list"><div class="empty-state">Cargando comunas…</div></div>
+      </aside>
 
-    <section class="dash-card">
-      <div class="dash-head"><div><h2>Energía</h2><small>Generación, capacidad y emisiones</small></div><span class="source-label">CNE</span></div>
-      <div id="energyIndicators" class="series-list"><div class="empty-state">Sin indicadores energéticos disponibles.</div></div>
-    </section>
-  </div>
+      <section id="communeDetail" class="commune-detail">
+        <div class="detail-placeholder">
+          <h3>Selecciona una comuna</h3>
+          <p>Verás todos los indicadores municipales disponibles, autoridades y períodos publicados por SINIM.</p>
+        </div>
+      </section>
+    </div>
+  </section>
+
+  <section id="compras" class="public-summary-section">
+    <div class="section-title"><div><h2>Compras públicas</h2><small>ChileCompra / Mercado Público</small></div></div>
+    <div id="purchaseFacts" class="fact-strip"><div class="empty-state">Cargando compras…</div></div>
+  </section>
 
   <section class="footer-card">
-    <div><b>Datos públicos con trazabilidad</b><small>Los valores mostrados se calculan desde registros oficiales preservando fuente y período.</small></div>
-    <div class="footer-links"><a href="#">Fuentes y metodología</a><a href="/status.html">Estado de datos</a></div>
+    <div><b>Hechos públicos con trazabilidad</b><small>La interfaz muestra datos normalizados; la fuente y período permanecen asociados a cada registro.</small></div>
+    <div class="footer-links"><a href="/status.html">Estado de sincronización</a></div>
   </section>
 </section>
 
-<aside class="map-pane">
+<aside class="map-pane explorer-map-pane">
   <div class="map-head">
-    <div><b>Chile por territorio</b><small id="mapSource">Geografía política-administrativa oficial</small></div>
-    <select id="mapLayer"><option value="geography">Geografía oficial</option></select>
+    <div><b id="mapTitle">Mapa territorial</b><small id="mapSource">IDE Chile</small></div>
+    <button id="resetMap" class="map-reset" type="button">Ver Chile</button>
   </div>
   <div id="map" class="real-map" aria-label="Mapa interactivo de Chile"></div>
   <div class="map-legend">
-    <b id="mapLegendTitle">Geografía oficial</b>
-    <span id="mapLegendUnit">Regiones de Chile</span>
-    <small id="mapLegendSource">Fuente: IDE Chile</small>
+    <b id="mapLegendTitle">Territorios</b>
+    <span id="mapLegendUnit">16 regiones · comunas con coordenadas</span>
+    <small id="mapLegendSource">Fuente territorial: IDE Chile / SINIM</small>
   </div>
 </aside>
 </main>
+
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script type="module" src="/app-v2.js"></script>
-</body></html>
+</body>
+</html>
