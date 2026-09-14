@@ -49,7 +49,7 @@ function renderMap(kind){
     if(!['Polygon','MultiPolygon'].includes(f.geometry?.type))continue;
     const p=f.properties||{},entry=p.values?.[meta.id]||null;
     const intensity=meta.id==='geography'?null:normalizedIntensity(entry?.value,min,max,meta.scale);
-    const fillOpacity=meta.id==='geography'?.08:(intensity==null?.035:.14+intensity*.58);
+    const fillOpacity=meta.id==='geography' ? .08 : (intensity==null ? .035 : .14+intensity*.58);
     const layer=L.geoJSON(f,{style:{weight:meta.id==='geography'?1.5:1,fillOpacity}});
     const detail=meta.id==='geography'
       ? `${p.label} · código ${p.code||'—'}`
