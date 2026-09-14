@@ -4,7 +4,6 @@ let requestSerial=0;
 
 function cell(text,cls){const el=document.createElement('div');if(cls)el.className=cls;el.textContent=text;return el}
 function positionLabel(authority){return authority.position||({mayor:'Alcalde/Alcaldesa',councillor:'Concejal/Concejala'}[authority.role]||authority.role||'Cargo no informado')}
-function ageLabel(authority){return authority.age!=null&&Number.isFinite(Number(authority.age))?`${Number(authority.age)} años`:'No informada'}
 
 async function enhanceAuthorities(){
   const code=communeSelect?.value;
@@ -29,7 +28,7 @@ async function enhanceAuthorities(){
 
     const table=document.createElement('div');table.className='authority-table';
     const header=document.createElement('div');header.className='authority-row authority-table-head';
-    for(const label of['Cargo','Nombre','Partido / condición política','Edad'])header.appendChild(cell(label));
+    for(const label of['Cargo','Nombre','Partido / condición política','Fuente'])header.appendChild(cell(label));
     table.appendChild(header);
 
     for(const authority of authorities){
@@ -37,16 +36,10 @@ async function enhanceAuthorities(){
       row.appendChild(cell(positionLabel(authority),'authority-position'));
       row.appendChild(cell(authority.name||'No informado','authority-name'));
       row.appendChild(cell(authority.party||'No informado','authority-party'));
-      const age=document.createElement('div');age.className='authority-age';
-      const primary=document.createElement('span');primary.textContent=ageLabel(authority);age.appendChild(primary);
-      if(authority.birthDate){const birth=document.createElement('small');birth.textContent=`Nacimiento: ${authority.birthDate}`;age.appendChild(birth)}
-      row.appendChild(age);table.appendChild(row);
+      row.appendChild(cell(authority.source||data.source||'SINIM / SUBDERE','authority-source'));
+      table.appendChild(row);
     }
     section.appendChild(table);
-
-    const note=document.createElement('p');note.className='authority-note';
-    note.textContent='La edad solo se muestra cuando existe una fecha de nacimiento respaldada por una fuente. No se infiere desde el nombre ni desde otras características.';
-    section.appendChild(note);
   }catch(error){console.error('No se pudo ampliar la ficha de autoridades',error)}
 }
 
