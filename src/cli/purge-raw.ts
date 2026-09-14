@@ -1,5 +1,5 @@
 import { existsSync, statSync, unlinkSync } from "node:fs";
-import { resolve, relative } from "node:path";
+import { dirname, resolve, relative } from "node:path";
 import { db } from "../db";
 
 type PurgeOptions={vacuum?:boolean;batchSize?:number;deleteFiles?:boolean};
@@ -18,7 +18,7 @@ function rawStats(){return{
 }}
 function under(root:string,path:string){const r=relative(root,path);return r===""||(!r.startsWith("..")&&!r.startsWith("/"))}
 function deleteRecordedFile(raw:string){
-  const path=resolve(raw),roots=[resolve("data/raw"),resolve(dbPath,"../raw")];
+  const path=resolve(raw),roots=[resolve("data/raw"),resolve(dirname(dbPath),"raw")];
   if(!roots.some(root=>under(root,path)))return false;
   try{if(existsSync(path))unlinkSync(path);return true}catch{return false}
 }
@@ -29,17 +29,15 @@ export function purgeRawBodies(options:PurgeOptions={}){
   console.log(`[db] RAW: ${before.bodies} blobs · ${human(before.bodyBytes)} comprimidos almacenados`);
   console.log(`[db] SQLite: ${human(diskBefore||pagesBefore.logicalBytes)} · libres internos=${human(pagesBefore.reclaimableBytes)}`);
 
-  let rowsPurged=0,bytesPurged=0,filesDeleted=0,filesKept=0,batch=0;
-  const update=db.prepare(`UPDATE raw_snapshots SET content_blob=NULL,storage_encoding='discarded',local_path=? WHERE id=?`);
+  let rowsPurged=0,bytesPurged=0,filesDeleted=0,filesNotDeleted=0,batch=0;
+  const update=db.prepare(`UPDATE raw_snapshots SET content_blob=NULL,storage_encoding='discarded',local_path=NULL WHERE id=?`);
   for(;;){
     const rows=db.query(`SELECT id,COALESCE(length(content_blob),0) bytes,local_path FROM raw_snapshots WHERE content_blob IS NOT NULL OR (local_path IS NOT NULL AND trim(local_path)<>'') ORDER BY id LIMIT ?`).all(batchSize) as RawRow[];
     if(!rows.length)break;
     db.transaction(()=>{
       for(const row of rows){
-        let keepPath=row.local_path;
-        if(row.local_path&&deleteFiles){if(deleteRecordedFile(row.local_path)){keepPath=null;filesDeleted++}else filesKept++}
-        else if(!row.local_path)keepPath=null;
-        update.run(keepPath,row.id);rowsPurged++;bytesPurged+=Number(row.bytes||0);
+        if(row.local_path&&deleteFiles){if(deleteRecordedFile(row.local_path))filesDeleted++;else filesNotDeleted++}
+        update.run(row.id);rowsPurged++;bytesPurged+=Number(row.bytes||0);
       }
     })();
     batch++;
@@ -53,7 +51,7 @@ export function purgeRawBodies(options:PurgeOptions={}){
   const afterPurge=rawStats(),pagesAfterPurge=pageStats();
   console.log(`[db] RAW purge terminado: blobs=${afterPurge.bodies} · bytes=${human(afterPurge.bodyBytes)}`);
   if(filesDeleted)console.log(`[db] Archivos RAW locales eliminados: ${filesDeleted}`);
-  if(filesKept)console.warn(`[db] ${filesKept} rutas RAW no se eliminaron por seguridad (fuera de data/raw o inaccesibles).`);
+  if(filesNotDeleted)console.warn(`[db] ${filesNotDeleted} archivos externos no fueron eliminados por seguridad; sus referencias sí fueron descartadas.`);
   console.log(`[db] Espacio SQLite reutilizable antes de compactar: ${human(pagesAfterPurge.reclaimableBytes)}`);
 
   if(options.vacuum){
@@ -69,5 +67,5 @@ export function purgeRawBodies(options:PurgeOptions={}){
     console.log("     bun run db:purge-raw -- --vacuum");
   }
 
-  return{rowsPurged,bytesPurged,filesDeleted,filesKept,before,after:rawStats(),pages:pageStats()};
+  return{rowsPurged,bytesPurged,filesDeleted,filesNotDeleted,before,after:rawStats(),pages:pageStats()};
 }
