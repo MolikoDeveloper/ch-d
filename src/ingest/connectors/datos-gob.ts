@@ -33,7 +33,7 @@ export async function syncDatosGob(){
       }
       if(start+rows>=body.result.count) break;
     }
-    finishRun(run,"success",null,seen,written);
+    finishRun(run,"success","catalog",seen,written);
     return {seen,written};
   }catch(e){ finishRun(run,"failed",String(e),seen,written); throw e; }
 }
