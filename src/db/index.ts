@@ -17,6 +17,92 @@ function addColumn(table:string, name:string, sql:string){
   if(!columns(table).has(name)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${name} ${sql}`);
 }
 
+function ensureExtendedSchema(){
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS elections (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      source_id TEXT NOT NULL REFERENCES sources(id),
+      external_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      office_type TEXT NOT NULL,
+      election_date TEXT,
+      round INTEGER,
+      territorial_scope TEXT,
+      status TEXT,
+      source_url TEXT,
+      raw_snapshot_id INTEGER REFERENCES raw_snapshots(id),
+      metadata_json TEXT NOT NULL DEFAULT '{}',
+      UNIQUE(source_id,external_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_elections_date ON elections(election_date,office_type);
+
+    CREATE TABLE IF NOT EXISTS election_candidates (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      election_id INTEGER NOT NULL REFERENCES elections(id) ON DELETE CASCADE,
+      external_id TEXT NOT NULL,
+      person_id INTEGER REFERENCES persons(id),
+      candidate_name TEXT NOT NULL,
+      party TEXT,
+      coalition TEXT,
+      list_name TEXT,
+      ballot_number TEXT,
+      metadata_json TEXT NOT NULL DEFAULT '{}',
+      UNIQUE(election_id,external_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_election_candidates_election ON election_candidates(election_id);
+
+    CREATE TABLE IF NOT EXISTS election_results (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      election_id INTEGER NOT NULL REFERENCES elections(id) ON DELETE CASCADE,
+      candidate_id INTEGER NOT NULL REFERENCES election_candidates(id) ON DELETE CASCADE,
+      geo_area_id INTEGER REFERENCES geo_areas(id),
+      votes INTEGER NOT NULL,
+      valid_vote_pct REAL,
+      total_vote_pct REAL,
+      position INTEGER,
+      elected INTEGER,
+      raw_snapshot_id INTEGER REFERENCES raw_snapshots(id),
+      metadata_json TEXT NOT NULL DEFAULT '{}',
+      UNIQUE(election_id,candidate_id,geo_area_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_election_results_geo ON election_results(geo_area_id,election_id);
+
+    CREATE TABLE IF NOT EXISTS election_totals (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      election_id INTEGER NOT NULL REFERENCES elections(id) ON DELETE CASCADE,
+      geo_area_id INTEGER REFERENCES geo_areas(id),
+      valid_votes INTEGER,
+      null_votes INTEGER,
+      blank_votes INTEGER,
+      total_votes INTEGER,
+      registered_voters INTEGER,
+      turnout_pct REAL,
+      raw_snapshot_id INTEGER REFERENCES raw_snapshots(id),
+      metadata_json TEXT NOT NULL DEFAULT '{}',
+      UNIQUE(election_id,geo_area_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_election_totals_geo ON election_totals(geo_area_id,election_id);
+
+    CREATE TABLE IF NOT EXISTS places (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      source_id TEXT NOT NULL REFERENCES sources(id),
+      external_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      place_type TEXT NOT NULL,
+      geo_area_id INTEGER REFERENCES geo_areas(id),
+      address TEXT,
+      centroid_lat REAL,
+      centroid_lon REAL,
+      description TEXT,
+      source_url TEXT,
+      raw_snapshot_id INTEGER REFERENCES raw_snapshots(id),
+      metadata_json TEXT NOT NULL DEFAULT '{}',
+      UNIQUE(source_id,external_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_places_geo ON places(geo_area_id,place_type);
+  `);
+}
+
 function backfillSinimCentroids(){
   const missing=(db.query(`SELECT id,code FROM geo_areas WHERE source_id='sinim' AND geo_type='commune' AND (centroid_lat IS NULL OR centroid_lon IS NULL)`).all() as Array<{id:number;code:string}>);
   if(!missing.length||!columns("raw_snapshots").has("content_blob"))return 0;
@@ -71,6 +157,7 @@ export function initDb() {
       });
     })();
 
+    ensureExtendedSchema();
     const { seedGeography } = await import("../geo");
     seedGeography();
     backfillSinimCentroids();
