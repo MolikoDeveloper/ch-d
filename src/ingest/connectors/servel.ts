@@ -47,6 +47,6 @@ export async function syncServel(){
           obs.run(`${geo.code||geo.name}:${id}:${y}`,String(y),id,n.value,u,geo.geoId,"commune",geo.code||geo.name,snap.snapshotId,JSON.stringify({process:r.process,resource:r.text,year:y}));written++;local++}}})();resourcesDone++;console.log(`[servel] ${i+1}/${selected.length} ✓ ${y} · ${r.process} · obs=${local}`)
       }catch(e){failed++;console.error(`[servel] ${i+1}/${selected.length} ! ${r.text}: ${String(e)}`)}updateRunProgress(run,seen,written,`${i+1}/${selected.length} recursos; ok=${resourcesDone}; failed=${failed}`)
     }
-    finishRun(run,resourcesDone?"success":"failed",`pages=${pages}; resources=${resourcesDone}; failed=${failed}`,seen,written);if(!resourcesDone)throw new Error("No se encontraron recursos SERVEL tabulares procesables");return{pages,resources:resourcesDone,seen,written,failed};
+    finishRun(run,written>0?"success":"failed",`pages=${pages}; resources=${resourcesDone}; observations=${written}; failed=${failed}`,seen,written);if(!written)throw new Error("SERVEL no produjo observaciones territoriales normalizadas");return{pages,resources:resourcesDone,seen,written,failed};
   }catch(e){finishRun(run,"failed",String(e),seen,written);throw e}
 }
