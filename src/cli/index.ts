@@ -7,6 +7,11 @@ import { syncDatosGobResource } from "../ingest/connectors/datos-resource";
 import { syncDatosGobResources } from "../ingest/connectors/datos-resources";
 import { syncEnergiaAbierta } from "../ingest/connectors/energia-abierta";
 import { syncSinim } from "../ingest/connectors/sinim";
+import { syncRsh } from "../ingest/connectors/rsh";
+import { syncCasen } from "../ingest/connectors/casen";
+import { syncSii } from "../ingest/connectors/sii";
+import { syncServel } from "../ingest/connectors/servel";
+import { syncPresupuestoAbierto } from "../ingest/connectors/presupuesto-abierto";
 import { syncIne } from "../ingest/connectors/ine";
 import { syncOfficialRegions } from "../geo";
 import { syncAll } from "./sync-all";
@@ -38,8 +43,13 @@ else if(command==="stats"){
   else if(target==="bcentral") console.log(await syncBCentral());
   else if(target==="energia-abierta") console.log(await syncEnergiaAbierta());
   else if(target==="sinim") console.log(await syncSinim());
+  else if(target==="rsh") console.log(await syncRsh());
+  else if(target==="casen") console.log(await syncCasen());
+  else if(target==="sii") console.log(await syncSii());
+  else if(target==="servel") console.log(await syncServel());
+  else if(target==="presupuesto-abierto") console.log(await syncPresupuestoAbierto());
   else if(target==="ine") console.log(await syncIne());
   else if(target==="geo") console.log(await syncOfficialRegions());
   else if(target==="datos-resource"){const id=flag("id");if(!id)throw new Error("Falta --id=<resource-id>");console.log(await syncDatosGobResource(id))}
   else throw new Error(`Fuente automática desconocida: ${target}`);
-}else console.log("Comandos: db:init | sources:list | stats | sync [all|datos-gob|datos-resources|datos-resource|chilecompra|bcentral|energia-abierta|sinim|ine|geo]");
+}else console.log("Comandos: db:init | sources:list | stats | sync [all|datos-gob|datos-resources|datos-resource|chilecompra|bcentral|energia-abierta|sinim|rsh|casen|sii|servel|presupuesto-abierto|ine|geo]");
