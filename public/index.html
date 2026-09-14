@@ -15,37 +15,75 @@
 </header>
 <main>
 <section class="panel dashboard-panel">
-  <div class="hero-row"><div><h1>Panorama político, económico y social</h1><p class="muted">Resumen de datos públicos normalizados. El detalle y los registros originales permanecen disponibles en sus vistas específicas.</p></div><div class="sync-badge"><span class="sync-dot"></span><div><b id="syncLabel">Datos locales</b><small id="updatedAt">Actualizando…</small></div></div></div>
-  <div class="filters"><label>Año<select><option>Todos</option><option>2026</option><option>2025</option></select></label><label>Región<select><option>Todas</option></select></label><label>Categoría<select><option>Todas</option><option>Compras públicas</option><option>Economía</option><option>Mercado laboral</option><option>Municipal</option><option>Energía</option><option>Elecciones</option><option>Legislación</option></select></label><label>Fuente<select id="sourceFilter"><option value="">Todas</option></select></label></div>
-  <div class="cards summary-cards">
-    <article><span class="icon blue-icon">DB</span><div><small>Fuentes registradas</small><strong id="sources">—</strong><em id="populatedSources">— con datos</em></div></article>
-    <article><span class="icon blue-icon">DS</span><div><small>Datasets descubiertos</small><strong id="datasets">—</strong><em>catálogo indexado</em></div></article>
-    <article><span class="icon red-icon">RG</span><div><small>Registros crudos</small><strong id="sourceRecords">—</strong><em>filas preservadas</em></div></article>
-    <article><span class="icon green-icon">SR</span><div><small>Métricas normalizadas</small><strong id="metricCount">—</strong><em>economía, trabajo, energía y municipios</em></div></article>
-    <article><span class="icon purple-icon">OB</span><div><small>Observaciones</small><strong id="observations">—</strong><em>puntos históricos</em></div></article>
+  <div class="hero-row">
+    <div>
+      <h1>Panorama de Chile</h1>
+      <p class="muted">Indicadores y hechos públicos provenientes de fuentes oficiales. Cada valor conserva su fuente, período y territorio.</p>
+    </div>
+    <div class="source-badge"><span class="sync-dot"></span><div><b>Datos verificables</b><small>BCCh · ChileCompra · SINIM · INE · CNE</small></div></div>
   </div>
 
-  <div class="dashboard-grid top-grid">
-    <section class="dash-card wide-card"><div class="dash-head"><div><h2>Indicadores económicos clave</h2><small>UF, UTM, IPC, dólar, TPM e actividad económica cuando estén disponibles</small></div><a href="#">Ver economía →</a></div><div id="economicSeries" class="series-list"><div class="empty-state">Cargando series…</div></div></section>
-    <section class="dash-card"><div class="dash-head"><div><h2>Compras públicas</h2><small>ChileCompra / Mercado Público</small></div><a href="#">Ver compras →</a></div><div class="politics-kpis compact-kpis"><div><b id="ccOrders">0</b><span>Órdenes</span></div><div><b id="ccAmount">$0</b><span>Monto registrado</span></div><div><b id="ccBuyers">0</b><span>Compradores</span></div><div><b id="ccSuppliers">0</b><span>Proveedores</span></div></div></section>
-    <section class="dash-card source-coverage-card"><div class="dash-head"><div><h2>Cobertura de fuentes</h2><small>Fuentes que ya aportan datos al sistema</small></div></div><div id="sourceCoverage" class="coverage-list"><div class="empty-state">Calculando cobertura…</div></div></section>
+  <div id="headlineCards" class="cards headline-cards">
+    <article><div><small>Cargando indicadores…</small><strong>—</strong></div></article>
   </div>
 
-  <div class="dashboard-grid bottom-grid">
-    <section class="dash-card"><div class="dash-head"><div><h2>Compras por territorio</h2><small>Monto ChileCompra asociado a regiones</small></div><a href="#">Ver mapa →</a></div><div id="ccRegions" class="bar-list"><div class="empty-state">Sin compras georreferenciadas todavía.</div></div></section>
-    <section class="dash-card"><div class="dash-head"><div><h2>Energía</h2><small>Comisión Nacional de Energía</small></div><a href="#">Ver energía →</a></div><div class="politics-kpis compact-kpis"><div><b id="energyMetrics">0</b><span>Métricas</span></div><div><b id="energyObservations">0</b><span>Observaciones</span></div><div><b id="energyRegional">0</b><span>Con territorio</span></div></div><div id="energyLatest" class="series-list"><div class="empty-state">Aún no se sincroniza Energía Abierta.</div></div></section>
-    <section class="dash-card"><div class="dash-head"><div><h2>Municipios / SINIM</h2><small>Indicadores y series comunales SUBDERE</small></div><a href="#">Ver municipal →</a></div><div class="politics-kpis compact-kpis"><div><b id="sinimCommunes">0</b><span>Comunas</span></div><div><b id="sinimMetrics">0</b><span>Métricas</span></div><div><b id="sinimObservations">0</b><span>Observaciones</span></div></div><div id="sinimLatest" class="series-list"><div class="empty-state">Aún no se sincroniza SINIM.</div></div></section>
-    <section class="dash-card"><div class="dash-head"><div><h2>Mercado laboral / INE</h2><small>API SDMX oficial del INE</small></div><a href="#">Ver sociedad →</a></div><div class="politics-kpis compact-kpis"><div><b id="ineFlows">0</b><span>Dataflows</span></div><div><b id="ineMetrics">0</b><span>Métricas</span></div><div><b id="ineObservations">0</b><span>Observaciones</span></div></div><div id="ineLatest" class="series-list"><div class="empty-state">Aún no se sincroniza INE.</div></div></section>
-    <section class="dash-card ingest-overview"><div class="dash-head"><div><h2>Estado de ingesta</h2><small>Progreso separado por conector</small></div></div><div id="connectorProgress" class="connector-progress"><div class="empty-state">Cargando progreso…</div></div></section>
-    <section class="dash-card"><div class="dash-head"><div><h2>Actividad reciente</h2><small>Últimas ejecuciones de ingesta</small></div></div><div id="recentRuns" class="activity-list"><div class="empty-state">Sin actividad reciente.</div></div></section>
+  <div class="dashboard-grid public-top-grid">
+    <section class="dash-card wide-card">
+      <div class="dash-head"><div><h2>Economía</h2><small>Indicadores nacionales recientes</small></div><span class="source-label">Banco Central de Chile</span></div>
+      <div id="economicSeries" class="series-list"><div class="empty-state">Cargando indicadores…</div></div>
+    </section>
+
+    <section class="dash-card">
+      <div class="dash-head"><div><h2>Compras públicas</h2><small>Órdenes y montos registrados</small></div><span class="source-label">ChileCompra</span></div>
+      <div class="fact-kpis">
+        <div><b id="ccAmount">—</b><span>Monto registrado</span></div>
+        <div><b id="ccOrders">—</b><span>Órdenes</span></div>
+        <div><b id="ccBuyers">—</b><span>Compradores</span></div>
+        <div><b id="ccSuppliers">—</b><span>Proveedores</span></div>
+      </div>
+      <div id="ccRegions" class="bar-list compact-bars"><div class="empty-state">Sin compras georreferenciadas todavía.</div></div>
+    </section>
   </div>
-  <section class="footer-card"><div><b>Datos abiertos para una mejor ciudadanía</b><small>Los resúmenes se calculan desde registros auditables y fuentes públicas.</small></div><span>Metodología y fuentes →</span></section>
+
+  <div class="dashboard-grid public-domain-grid">
+    <section class="dash-card">
+      <div class="dash-head"><div><h2>Municipios</h2><small>Información comunal y autoridades locales</small></div><span class="source-label">SINIM / SUBDERE</span></div>
+      <div class="fact-kpis three-kpis">
+        <div><b id="sinimCommunes">—</b><span>Comunas</span></div>
+        <div><b id="sinimMayors">—</b><span>Alcaldes/as</span></div>
+        <div><b id="sinimCouncillors">—</b><span>Concejales/as</span></div>
+      </div>
+      <div id="sinimIndicators" class="series-list"><div class="empty-state">Sin indicadores municipales disponibles.</div></div>
+    </section>
+
+    <section class="dash-card">
+      <div class="dash-head"><div><h2>Trabajo</h2><small>Empleo, desocupación y fuerza de trabajo</small></div><span class="source-label">INE</span></div>
+      <div id="laborIndicators" class="series-list"><div class="empty-state">Sin indicadores laborales disponibles.</div></div>
+    </section>
+
+    <section class="dash-card">
+      <div class="dash-head"><div><h2>Energía</h2><small>Generación, capacidad y emisiones</small></div><span class="source-label">CNE</span></div>
+      <div id="energyIndicators" class="series-list"><div class="empty-state">Sin indicadores energéticos disponibles.</div></div>
+    </section>
+  </div>
+
+  <section class="footer-card">
+    <div><b>Datos públicos con trazabilidad</b><small>Los valores mostrados se calculan desde registros oficiales preservando fuente y período.</small></div>
+    <div class="footer-links"><a href="#">Fuentes y metodología</a><a href="/status.html">Estado de datos</a></div>
+  </section>
 </section>
 
 <aside class="map-pane">
-  <div class="map-head"><div><b>Mapa territorial de Chile</b><small>Geografía oficial + datos territoriales normalizados</small></div><select id="mapLayer"><option value="combined">Panorama territorial</option><option value="geography">Geografía oficial</option><option value="transaction">Compras públicas</option><option value="energy">Energía</option><option value="municipal">Municipios / SINIM</option><option value="labor">INE / trabajo</option></select></div>
+  <div class="map-head">
+    <div><b>Chile por territorio</b><small id="mapSource">Geografía política-administrativa oficial</small></div>
+    <select id="mapLayer"><option value="geography">Geografía oficial</option></select>
+  </div>
   <div id="map" class="real-map" aria-label="Mapa interactivo de Chile"></div>
-  <div class="map-legend"><b>Capas</b><span><i class="dot area-dot"></i>Región oficial</span><span><i class="dot blue"></i>ChileCompra</span><span><i class="dot green"></i>Energía</span><span><i class="dot purple"></i>SINIM / INE</span><small>Los datos comunales se agregan a su región padre cuando aún no existe polígono comunal.</small></div>
+  <div class="map-legend">
+    <b id="mapLegendTitle">Geografía oficial</b>
+    <span id="mapLegendUnit">Regiones de Chile</span>
+    <small id="mapLegendSource">Fuente: IDE Chile</small>
+  </div>
 </aside>
 </main>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
