@@ -41,7 +41,7 @@ export function indicatorCatalog(sourceId:string){
   return rows(`
     SELECT external_id metric,title,subcategory,unit,frequency,geo_scope
     FROM metric_definitions
-    WHERE source_id=?
+    WHERE source_id=? AND geo_scope IN ('region','commune')
     ORDER BY COALESCE(subcategory,''),title
   `,sourceId);
 }
