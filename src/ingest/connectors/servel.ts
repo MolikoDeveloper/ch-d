@@ -5,12 +5,13 @@ import { parseResource } from "../parsers/tabular";
 
 type Row=Record<string,unknown>;
 type Link={url:string;text:string;year:number|null};
+type Numeric={value:number;pct:boolean};
 const HUB="https://www.servel.cl/elecciones-participacion-electoral/";
 
 function decode(s:string){return s.replace(/&amp;/gi,"&").replace(/&quot;/gi,'"').replace(/&#0*39;|&apos;/gi,"'").replace(/&nbsp;/gi," ").replace(/<[^>]+>/g," ").replace(/\s+/g," ").trim()}
 function norm(v:unknown){return String(v??"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z0-9%]+/g," ").replace(/\s+/g," ").trim()}
 function clean(v:unknown){return String(v??"").replace(/\s+/g," ").trim()}
-function numeric(v:unknown){if(typeof v==="number")return Number.isFinite(v)?v:null;let s=clean(v);if(!s||/^[-*]+$/.test(s))return null;const pct=s.includes("%");s=s.replace(/%/g,"").replace(/\.(?=\d{3}(?:\D|$))/g,"").replace(",",".");const n=Number(s);return Number.isFinite(n)?{value:n,pct}:null}
+function numeric(v:unknown):Numeric|null{if(typeof v==="number")return Number.isFinite(v)?{value:v,pct:false}:null;let s=clean(v);if(!s||/^[-*]+$/.test(s))return null;const pct=s.includes("%");s=s.replace(/%/g,"").replace(/\.(?=\d{3}(?:\D|$))/g,"").replace(",",".");const n=Number(s);return Number.isFinite(n)?{value:n,pct}:null}
 function nearestYear(html:string,at:number){const before=decode(html.slice(Math.max(0,at-1800),at)),all=[...before.matchAll(/\b(20\d{2}|201\d)\b/g)];return all.length?Number(all.at(-1)![1]):null}
 function anchors(html:string,base:string,inheritYear:number|null=null){const out:Link[]=[];for(const m of html.matchAll(/<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi)){try{out.push({url:new URL(decode(m[1]),base).toString(),text:decode(m[2]),year:inheritYear??nearestYear(html,m.index??0)})}catch{}}return out}
 function yearOf(...values:string[]){for(const v of values){const m=v.match(/\b(20\d{2}|201\d)\b/);if(m)return Number(m[1])}return null}
@@ -41,7 +42,7 @@ export async function syncServel(){
     for(let i=0;i<selected.length;i++){
       const r=selected[i];try{
         const f=format(r.url),snap=await fetchAndSnapshot("servel",run,r.url),parsed=parseResource(f,snap.bytes,snap.text),y=r.year??yearOf(r.process,r.text,r.url);if(!y){console.warn(`[servel] sin año, omitido: ${r.text}`);continue}let local=0;
-        db.transaction(()=>{for(const row of parsed){if((row as any).__parse_error)continue;seen++;const geo=commune(row);if(!geo.geoId)continue;for(const[header,raw]of Object.entries(row)){if(isGeoOrDimension(header)||!isParticipation(header))continue;const n=numeric(raw);if(!n)continue;const u=unit(header,raw),id=metricId(header,r.process);
+        db.transaction(()=>{for(const row of parsed){if((row as any).__parse_error)continue;seen++;const geo=commune(row);if(!geo.geoId)continue;for(const[header,raw]of Object.entries(row)){if(isGeoOrDimension(header)||!isParticipation(header))continue;const n=numeric(raw);if(!n)continue;const u=n.pct?"%":unit(header,raw),id=metricId(header,r.process);
           metric.run(id,clean(header),`Estadística oficial de participación electoral: ${r.process}.`,"elecciones",r.process,u,"event",JSON.stringify({page:r.page,resource:r.url,year:y,mapEligible:true}));
           obs.run(`${geo.code||geo.name}:${id}:${y}`,String(y),id,n.value,u,geo.geoId,"commune",geo.code||geo.name,snap.snapshotId,JSON.stringify({process:r.process,resource:r.text,year:y}));written++;local++}}})();resourcesDone++;console.log(`[servel] ${i+1}/${selected.length} ✓ ${y} · ${r.process} · obs=${local}`)
       }catch(e){failed++;console.error(`[servel] ${i+1}/${selected.length} ! ${r.text}: ${String(e)}`)}updateRunProgress(run,seen,written,`${i+1}/${selected.length} recursos; ok=${resourcesDone}; failed=${failed}`)
