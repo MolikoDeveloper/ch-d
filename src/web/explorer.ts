@@ -48,7 +48,7 @@ export function indicatorCatalog(sourceId:string){
 
 export function communeProfile(code:string){
   const commune=one(`
-    SELECT c.id,c.code,c.name,c.centroid_lat,c.centroid_lon,
+    SELECT c.id,c.code,c.name,c.centroid_lat,c.centroid_lon,c.geometry_json,
            r.id region_id,r.code region_code,r.name region_name
     FROM geo_areas c LEFT JOIN geo_areas r ON r.id=c.parent_id
     WHERE c.geo_type='commune' AND c.code=?
