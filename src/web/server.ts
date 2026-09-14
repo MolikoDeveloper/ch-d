@@ -46,7 +46,7 @@ function panoramaPayload(){return{
   generatedAt:new Date().toISOString(),
   economy:economyFacts(),
   purchases:purchaseSummary(),
-  territory:{regions:count(`SELECT count(*) n FROM geo_areas WHERE source_id='ide-chile' AND geo_type='region'`),communes:count(`SELECT count(*) n FROM geo_areas WHERE source_id='sinim' AND geo_type='commune'`),mayors:count(`SELECT count(*) n FROM relationships WHERE source_id='sinim' AND relation_type='mayor'`),councillors:count(`SELECT count(*) n FROM relationships WHERE source_id='sinim' AND relation_type='councillor'`)},
+  territory:{regions:count(`SELECT count(*) n FROM geo_areas WHERE source_id='ide-chile' AND geo_type='region'`),communes:count(`SELECT count(*) n FROM geo_areas WHERE geo_type='commune'`),mayors:count(`SELECT count(*) n FROM relationships WHERE source_id='sinim' AND relation_type='mayor'`),councillors:count(`SELECT count(*) n FROM relationships WHERE source_id='sinim' AND relation_type='councillor'`)},
 };}
 
 function progressPayload(){
