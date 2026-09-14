@@ -29,8 +29,7 @@ function metricDefinitions(sourceId: string): MetricDef[] {
   return rows(`SELECT external_id,title,unit,frequency,geo_scope FROM metric_definitions WHERE source_id=? ORDER BY title`, sourceId);
 }
 
-function pickMetric(sourceId: string, spec: IndicatorSpec): MetricDef | null {
-  const defs = metricDefinitions(sourceId);
+function pickMetricFrom(defs: MetricDef[], spec: IndicatorSpec): MetricDef | null {
   for (const pattern of spec.patterns) {
     const p = normalizeText(pattern);
     const candidates = defs.filter(d => normalizeText(d.title).includes(p));
@@ -54,10 +53,9 @@ function latestNumeric(sourceId: string, metric: MetricDef) {
 }
 
 function featuredIndicators(sourceId: string, specs: IndicatorSpec[]) {
-  const out: any[] = [];
-  const used = new Set<string>();
+  const defs = metricDefinitions(sourceId), out: any[] = [], used = new Set<string>();
   for (const spec of specs) {
-    const metric = pickMetric(sourceId, spec);
+    const metric = pickMetricFrom(defs, spec);
     if (!metric || used.has(metric.external_id)) continue;
     const obs = latestNumeric(sourceId, metric);
     if (!obs) continue;
@@ -81,9 +79,9 @@ function featuredIndicators(sourceId: string, specs: IndicatorSpec[]) {
 const ECONOMIC_SPECS: IndicatorSpec[] = [
   { key: "uf", label: "Unidad de Fomento (UF)", patterns: ["unidad de fomento"] },
   { key: "utm", label: "Unidad Tributaria Mensual (UTM)", patterns: ["unidad tributaria mensual"] },
-  { key: "ipc", label: "IPC", patterns: ["indice de precios al consumidor", "ipc general"] },
-  { key: "usd", label: "Dólar observado", patterns: ["dolar observado"] },
-  { key: "tpm", label: "Tasa de Política Monetaria", patterns: ["tasa de politica monetaria", "politica monetaria"] },
+  { key: "ipc", label: "IPC", patterns: ["indice de precios al consumidor", "ndice de precios al consumidor", "ipc general"] },
+  { key: "usd", label: "Dólar observado", patterns: ["dolar observado", "d lar observado"] },
+  { key: "tpm", label: "Tasa de Política Monetaria", patterns: ["tasa de politica monetaria", "tasa de pol tica monetaria", "politica monetaria"] },
   { key: "imacec", label: "IMACEC", patterns: ["imacec"] },
 ];
 const ENERGY_SPECS: IndicatorSpec[] = [
@@ -165,20 +163,8 @@ function headlineCards(economy: any, purchases: any, municipal: any) {
 }
 
 function dashboardPayload() {
-  const economy = economySummary();
-  const purchases = chileCompraSummary();
-  const municipal = municipalSummary();
-  const labor = laborSummary();
-  const energy = energySummary();
-  return {
-    generatedAt: new Date().toISOString(),
-    headline: headlineCards(economy, purchases, municipal),
-    economy,
-    purchases,
-    municipal,
-    labor,
-    energy,
-  };
+  const economy = economySummary(), purchases = chileCompraSummary(), municipal = municipalSummary(), labor = laborSummary(), energy = energySummary();
+  return { generatedAt: new Date().toISOString(), headline: headlineCards(economy, purchases, municipal), economy, purchases, municipal, labor, energy };
 }
 
 function latestRun(sourceId: string) {
@@ -244,21 +230,23 @@ function mapPayload() {
   const purchaseRows = rows(`SELECT g.id region_id,COUNT(t.id) orders,COALESCE(SUM(t.amount),0) value FROM geo_areas g LEFT JOIN transactions t ON t.geo_area_id=g.id AND t.source_id='chilecompra' WHERE g.source_id='ide-chile' AND g.geo_type='region' GROUP BY g.id`);
   const purchases = new Map(purchaseRows.map(r => [r.region_id, r]));
 
-  const municipalMetric = pickMetric("sinim", SINIM_SPECS[0]);
-  const laborMetric = pickMetric("ine", LABOR_SPECS[0]);
-  const energyMetric = pickMetric("energia-abierta", ENERGY_SPECS[0]) ?? pickMetric("energia-abierta", ENERGY_SPECS[1]);
+  const sinimDefs = metricDefinitions("sinim"), ineDefs = metricDefinitions("ine"), energyDefs = metricDefinitions("energia-abierta");
+  const municipalMetric = pickMetricFrom(sinimDefs, SINIM_SPECS[0]);
+  const laborMetric = pickMetricFrom(ineDefs, LABOR_SPECS[0]);
+  const energyMetric = pickMetricFrom(energyDefs, ENERGY_SPECS[0]) ?? pickMetricFrom(energyDefs, ENERGY_SPECS[1]);
 
-  const municipalValues = new Map((municipalMetric ? municipalPopulationByRegion(municipalMetric.external_id) : []).map(r => [r.region_id, r]));
-  const laborValues = new Map((laborMetric ? directRegionalValues("ine", laborMetric.external_id) : []).map(r => [r.region_id, r]));
-  const energyValues = new Map((energyMetric ? directRegionalValues("energia-abierta", energyMetric.external_id) : []).map(r => [r.region_id, r]));
+  const municipalRows = municipalMetric ? municipalPopulationByRegion(municipalMetric.external_id) : [];
+  const laborRows = laborMetric ? directRegionalValues("ine", laborMetric.external_id) : [];
+  const energyRows = energyMetric ? directRegionalValues("energia-abierta", energyMetric.external_id) : [];
+  const municipalValues = new Map(municipalRows.map(r => [r.region_id, r])), laborValues = new Map(laborRows.map(r => [r.region_id, r])), energyValues = new Map(energyRows.map(r => [r.region_id, r]));
 
   const layers: any[] = [
     { id: "geography", label: "Geografía oficial", source: "IDE Chile", unit: null, scale: "none" },
-    { id: "purchases", label: "Compras públicas — monto", source: "ChileCompra", unit: "CLP", scale: "log" },
+    { id: "purchases", label: "Compras públicas — monto", source: "ChileCompra", unit: "CLP", scale: "log", countLabel: "órdenes" },
   ];
-  if (municipalMetric) layers.push({ id: "municipal", label: municipalMetric.title, source: "SINIM / SUBDERE", unit: municipalMetric.unit, scale: "log" });
-  if (laborMetric) layers.push({ id: "labor", label: laborMetric.title, source: "INE", unit: laborMetric.unit, scale: "linear" });
-  if (energyMetric) layers.push({ id: "energy", label: energyMetric.title, source: "CNE", unit: energyMetric.unit, scale: "log" });
+  if (municipalMetric && municipalRows.length) layers.push({ id: "municipal", label: municipalMetric.title, source: "SINIM / SUBDERE", unit: municipalMetric.unit, scale: "log", countLabel: "comunas" });
+  if (laborMetric && laborRows.length) layers.push({ id: "labor", label: laborMetric.title, source: "INE", unit: laborMetric.unit, scale: "linear" });
+  if (energyMetric && energyRows.length) layers.push({ id: "energy", label: energyMetric.title, source: "CNE", unit: energyMetric.unit, scale: "log" });
 
   const areas = rows(`SELECT id,code,name,geometry_json FROM geo_areas WHERE source_id='ide-chile' AND geo_type='region' AND geometry_json IS NOT NULL`);
   return {
@@ -270,10 +258,7 @@ function mapPayload() {
         type: "Feature",
         geometry: JSON.parse(r.geometry_json),
         properties: {
-          kind: "area",
-          id: r.id,
-          code: r.code,
-          label: r.name,
+          kind: "area", id: r.id, code: r.code, label: r.name,
           values: {
             purchases: p ? { value: Number(p.value || 0), count: Number(p.orders || 0), date: null } : null,
             municipal: m ? { value: Number(m.value), count: Number(m.communes || 0), date: m.date } : null,
